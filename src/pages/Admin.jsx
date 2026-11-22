@@ -55,7 +55,9 @@ export default function Admin() {
   async function addVideo(e) {
     e.preventDefault();
     if (!ytId(form.url)) { setMsg("Invalid YouTube URL"); return; }
-    const minOrder = videos.length ? Math.min(...videos.map((v) => v.order ?? 0)) : 0;
+    const sAll = await getDocs(collection(db, "videos"));
+    const catDocs = sAll.docs.map((d) => d.data()).filter((v) => v.category === form.category);
+    const minOrder = catDocs.length ? Math.min(...catDocs.map((v) => v.order ?? 0)) : 0;
     await addDoc(collection(db, "videos"), {
       url: form.url, title: form.title, type: form.type, category: form.category,
       order: minOrder - 1, views: 0, createdAt: serverTimestamp(),

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, trackCvDownload, bumpLogoViews } from "../analytics";
-import { thumb, embedUrl } from "../youtube";
+import { thumb, embedUrl, thumbFallback } from "../youtube";
 import { WA } from "../App";
 
 const SERVICES = [
@@ -83,7 +83,7 @@ export default function Home() {
         <div className="vid-strip">
           {homeVids.map((v) => (
             <Link key={v.id} to="/works" className="vid-thumb">
-              {thumb(v.url) && <img src={thumb(v.url)} alt={v.title || "video"} loading="lazy" />}
+              {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             </Link>
           ))}
         </div>
@@ -91,7 +91,7 @@ export default function Home() {
       </section>
 
 
-      {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <div className="player"><iframe src={embedUrl(playing)} title={brand.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
+      {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <div className="player"><iframe src={embedUrl(playing)} title={brand.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} onError={thumbFallback} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
     </>
   );
 }

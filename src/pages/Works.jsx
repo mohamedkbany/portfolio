@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, bumpVideoViews } from "../analytics";
-import { thumb, embedUrl } from "../youtube";
+import { thumb, embedUrl, thumbFallback } from "../youtube";
 
 const CATS = [
   { key: "ai", label: "AI Creative Solutions" },
@@ -45,7 +45,7 @@ export default function Works() {
       <div className={kind==="short"?"gallery shorts-gallery":"gallery"}>
         {videos.filter(v=>(v.type||"short")===kind).map((v) => (
           <button key={v.id} className="card" onClick={() => open(v)}>
-            {thumb(v.url) && <img src={thumb(v.url)} alt={v.title || "video"} loading="lazy" />}
+            {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             <span className="play">▶</span>
             {v.title && <span className="card-title">{v.title}</span>}
           </button>

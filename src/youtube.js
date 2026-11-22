@@ -5,7 +5,13 @@ export function ytId(url) {
 }
 export function thumb(url) {
   const id = ytId(url);
-  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+  return id ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : null;
+}
+export function thumbFallback(e) {
+  const img = e.target;
+  if (img.dataset.fb) return;
+  img.dataset.fb = "1";
+  img.src = img.src.replace("maxresdefault.jpg", "hqdefault.jpg");
 }
 export function embedUrl(url) {
   const id = ytId(url);
