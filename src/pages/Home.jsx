@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { trackVisit, trackCvDownload, bumpLogoViews } from "../analytics";
+import { trackVisit, trackCvDownload, trackLogoOpen } from "../analytics";
 import { thumb, embedUrl, thumbFallback } from "../youtube";
 import { WA } from "../App";
 
@@ -48,7 +48,7 @@ export default function Home() {
         <p className="hint">Explore projects and creative work for each brand.</p>
         <div className="logo-row">
           {logos.map((l) => (
-            <button key={l.id} className="brand-card" onClick={() => {setBrand(l); setPlaying(null); bumpLogoViews(l.id);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
+            <button key={l.id} className="brand-card" onClick={() => {setBrand(l); setPlaying(null); trackLogoOpen(l);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
           ))}
         </div>
       </section>

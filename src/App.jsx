@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import Home from "./pages/Home";
 import Works from "./pages/Works";
 import Admin from "./pages/Admin";
-import { trackCvDownload } from "./analytics";
+import { trackCvDownload, startHeartbeat } from "./analytics";
 
 const WA = "https://wa.me/201025510624?text=Hello!%20I'm%20interested%20in%20professional%20video%20editing%20services.";
 
@@ -63,6 +63,7 @@ function WhatsAppFloat() {
 export { WA, Nav, Footer, WhatsAppFloat };
 
 export default function App() {
+  useEffect(() => { startHeartbeat(); }, []);
   return (
     <BrowserRouter>
       <Routes>

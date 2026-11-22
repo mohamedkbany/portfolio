@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { trackVisit, bumpVideoViews } from "../analytics";
+import { trackVisit, trackVideoPlay } from "../analytics";
 import { thumb, embedUrl, thumbFallback } from "../youtube";
 
 const CATS = [
@@ -31,7 +31,7 @@ export default function Works() {
 
   function open(v) {
     setPlaying(v);
-    bumpVideoViews(v.id);
+    trackVideoPlay(v);
   }
 
   return (

@@ -1,33 +1,523 @@
-import { useEffect, useState } from "react";
-import { db, auth, googleProvider, ADMIN_EMAIL } from "../firebase";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { db, auth, googleProvider, ADMIN_EMAIL, CV_DOC } from "../firebase";
 import { signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
-import { thumb, ytId } from "../youtube";
+import { thumb, ytId, thumbFallback } from "../youtube";
 
 const CATS = ["home", "ai", "motion", "editing", "tv"];
+const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/vgnnxs1g/image/upload";
+const CLOUDINARY_PRESET = "kbany_uploads";
+
+const tsOf = (e) => (e.createdAt && e.createdAt.toMillis ? e.createdAt.toMillis() : 0);
+const dayKey = (ms) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const DAY = 86400000;
+function relTime(ms) {
+  if (!ms) return "";
+  const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function BarChart({ data, label }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div className="chart">
+      <p className="chart-label">{label}</p>
+      <div className="bars">
+        {data.map((d) => (
+          <div key={d.key} className="bar-col" title={`${d.key}: ${d.value}`}>
+            <span className="bar-val">{d.value || ""}</span>
+            <div className="bar" style={{ height: `${Math.max(2, (d.value / max) * 100)}%` }} />
+            <span className="bar-day">{d.key.slice(5)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function last14(events, type) {
+  const out = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 13; i >= 0; i--) {
+    const start = today.getTime() - i * DAY;
+    const key = dayKey(start);
+    const value = events.filter((e) => e.type === type && tsOf(e) >= start && tsOf(e) < start + DAY).length;
+    out.push({ key, value });
+  }
+  return out;
+}
+
+function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
+  const now = Date.now();
+  const visits = events.filter((e) => e.type === "visit");
+  const todayKey = dayKey(now);
+  const yKey = dayKey(now - DAY);
+  const monthKey = todayKey.slice(0, 7);
+  const today = visits.filter((e) => dayKey(tsOf(e)) === todayKey).length;
+  const yesterday = visits.filter((e) => dayKey(tsOf(e)) === yKey).length;
+  const month = visits.filter((e) => dayKey(tsOf(e)).startsWith(monthKey)).length;
+  const videoViews = videos.reduce((a, v) => a + (v.views || 0), 0);
+  const brandOpens = logos.reduce((a, l) => a + (l.views || 0), 0);
+  const online = new Set(events.filter((e) => now - tsOf(e) < 5 * 60000).map((e) => e.visitorId)).size;
+  const diff = today - yesterday;
+  const pct = yesterday ? Math.round((diff / yesterday) * 100) : (today ? 100 : 0);
+
+  const feed = [...events].sort((a, b) => tsOf(b) - tsOf(a)).slice(0, 25);
+  const icon = { visit: "👁", video_play: "▶", brand_open: "🏢", cv_download: "📄", heartbeat: "💓" };
+  const text = (e) => {
+    if (e.type === "visit") return `Visit on ${e.page || "/"}`;
+    if (e.type === "video_play") return `Played "${e.title || e.videoId}" (${e.category || "?"} ${e.format || ""})`;
+    if (e.type === "brand_open") return `Opened brand "${e.name || "?"}"`;
+    if (e.type === "cv_download") return "CV downloaded";
+    if (e.type === "heartbeat") return "Visitor still browsing";
+    return e.type;
+  };
+
+  return (
+    <div>
+      <div className="view-head"><h3>Analytics</h3><span className="muted">Updated {refreshedAt}</span></div>
+      <p className="muted">Website traffic overview</p>
+      <div className="cards">
+        <div className="card"><span>Total Visits</span><strong>{visits.length}</strong></div>
+        <div className="card"><span>Today</span><strong>{today}</strong></div>
+        <div className="card"><span>This Month</span><strong>{month}</strong></div>
+        <div className="card"><span>CV Downloads</span><strong>{cvViews}</strong></div>
+        <div className="card"><span>Video Views</span><strong>{videoViews}</strong></div>
+        <div className="card"><span>Brand Opens</span><strong>{brandOpens}</strong></div>
+        <div className="card live"><span>Online Now</span><strong>{online}</strong><em>LIVE</em></div>
+      </div>
+
+      <div className="panel">
+        <h4>Today vs. yesterday</h4>
+        <div className="vs">
+          <div><span>Yesterday</span><strong>{yesterday}</strong></div>
+          <div className={diff >= 0 ? "delta up" : "delta down"}>{diff >= 0 ? "+" : ""}{diff} ({diff >= 0 ? "+" : ""}{pct}%)</div>
+          <div><span>Today</span><strong>{today}</strong></div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h4>Daily visits</h4>
+        <BarChart data={last14(events, "visit")} label="Last 14 days" />
+      </div>
+
+      <div className="panel">
+        <h4>Recent activity</h4>
+        <div className="feed">
+          {feed.length === 0 && <p className="muted">No events yet.</p>}
+          {feed.map((e) => (
+            <div key={e.id} className="feed-row">
+              <span className="feed-icon">{icon[e.type] || "•"}</span>
+              <span className="feed-text">{text(e)}</span>
+              <span className="feed-time">{relTime(tsOf(e))}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VideoAnalytics({ videos, events, refreshedAt }) {
+  const total = videos.length;
+  const totalViews = videos.reduce((a, v) => a + (v.views || 0), 0);
+  const top = [...videos].sort((a, b) => (b.views || 0) - (a.views || 0));
+  const topViews = top[0] ? top[0].views || 0 : 0;
+  const cats = new Set(videos.map((v) => v.category)).size;
+  const byCat = CATS.map((c) => ({ key: c, value: videos.filter((v) => v.category === c).length }));
+  const shorts = videos.filter((v) => v.type === "short").length;
+  const longs = videos.filter((v) => v.type !== "short").length;
+
+  return (
+    <div>
+      <div className="view-head"><h3>Video Performance</h3><span className="muted">Updated {refreshedAt}</span></div>
+      <p className="muted">Track your portfolio videos and discover which ones attract the most attention.</p>
+
+      <div className="cards">
+        <div className="card"><span>Total Videos</span><strong>{total}</strong></div>
+        <div className="card"><span>Total Views</span><strong>{totalViews}</strong></div>
+        <div className="card"><span>Top Video Views</span><strong>{topViews}</strong></div>
+        <div className="card"><span>Categories</span><strong>{cats}</strong></div>
+      </div>
+
+      <div className="panel">
+        <h4>Top 5 Videos</h4>
+        {top.slice(0, 5).map((v, i) => (
+          <div key={v.id} className="top-row">
+            <span className="rank">#{i + 1}</span>
+            {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt="" />}
+            <div className="top-info">
+              <strong>{v.title || ytId(v.url)}</strong>
+              <span className="muted">{v.category} · {v.type}</span>
+            </div>
+            <span className="top-views">{v.views || 0} views</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel">
+        <h4>Plays per day</h4>
+        <BarChart data={last14(events, "video_play")} label="Last 14 days" />
+      </div>
+
+      <div className="panel">
+        <h4>Content Distribution</h4>
+        <BarChart data={byCat} label="Videos by category" />
+        <p className="muted">Short: {shorts} · Long: {longs}</p>
+      </div>
+
+      <div className="panel">
+        <h4>All videos by views</h4>
+        <table className="vtable">
+          <thead><tr><th>#</th><th></th><th>Title</th><th>Category</th><th>Format</th><th>Views</th></tr></thead>
+          <tbody>
+            {top.map((v, i) => (
+              <tr key={v.id}>
+                <td>{i + 1}</td>
+                <td>{thumb(v.url) && <img className="tthumb" src={thumb(v.url)} onError={thumbFallback} alt="" />}</td>
+                <td>{v.title || ytId(v.url)}</td>
+                <td>{v.category}</td>
+                <td>{v.type}</td>
+                <td>{v.views || 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LogosManager({ logos, reload, setMsg, msg }) {
+  const [form, setForm] = useState({ name: "", logoUrl: "" });
+  const [file, setFile] = useState(null);
+  const [newVids, setNewVids] = useState([""]);
+  const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editVids, setEditVids] = useState([]);
+
+  async function uploadLogo() {
+    if (file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("upload_preset", CLOUDINARY_PRESET);
+      const r = await fetch(CLOUDINARY_URL, { method: "POST", body: fd });
+      const j = await r.json();
+      if (!j.secure_url) throw new Error("Logo upload failed");
+      return j.secure_url;
+    }
+    return form.logoUrl.trim();
+  }
+
+  async function addCompany(e) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    try {
+      const logo = await uploadLogo();
+      if (!logo) { setMsg("Add a logo file or URL."); setBusy(false); return; }
+      const urls = newVids.map((u) => u.trim()).filter((u) => ytId(u));
+      const maxOrder = logos.length ? Math.max(...logos.map((l) => l.order ?? 0)) : 0;
+      await addDoc(collection(db, "Logos"), {
+        name: form.name.trim(), logo, videos: urls, order: maxOrder + 1, views: 0, createdAt: serverTimestamp(),
+      });
+      setForm({ name: "", logoUrl: "" });
+      setFile(null);
+      setNewVids([""]);
+      setMsg("Company added.");
+      reload();
+    } catch (err) { setMsg(err.message); }
+    setBusy(false);
+  }
+
+  async function saveName(l) {
+    await updateDoc(doc(db, "Logos", l.id), { name: l.name ?? "" });
+    setMsg("Saved.");
+  }
+
+  async function remove(l) {
+    if (!window.confirm(`Delete "${l.name || "company"}"?`)) return;
+    await deleteDoc(doc(db, "Logos", l.id));
+    reload();
+  }
+
+  async function move(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= logos.length) return;
+    const a = logos[i], b = logos[j];
+    await updateDoc(doc(db, "Logos", a.id), { order: b.order ?? 0 });
+    await updateDoc(doc(db, "Logos", b.id), { order: a.order ?? 0 });
+    reload();
+  }
+
+  function startEdit(l) {
+    setEditId(l.id);
+    setEditVids([...(l.videos || [])]);
+  }
+
+  async function saveVids(l) {
+    const urls = editVids.map((u) => u.trim()).filter((u) => ytId(u));
+    await updateDoc(doc(db, "Logos", l.id), { videos: urls });
+    setEditId(null);
+    setMsg("Videos saved.");
+    reload();
+  }
+
+  return (
+    <div>
+      <div className="view-head"><h3>Add company</h3></div>
+      <p className="muted">Manage companies, logos and YouTube projects</p>
+      <form className="add-form" onSubmit={addCompany}>
+        <input placeholder="Company name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0] || null)} />
+        <input placeholder="…or logo image URL" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} />
+        {newVids.map((u, i) => (
+          <div key={i} className="vid-input-row">
+            <input placeholder="YouTube video URL" value={u} onChange={(e) => setNewVids(newVids.map((x, xi) => xi === i ? e.target.value : x))} />
+            <button type="button" className="btn" onClick={() => setNewVids(newVids.filter((_, xi) => xi !== i))} disabled={newVids.length === 1}>✕</button>
+          </div>
+        ))}
+        <button type="button" className="btn" onClick={() => setNewVids([...newVids, ""])}>+ Add video</button>
+        <button className="btn primary" type="submit" disabled={busy}>{busy ? "Uploading…" : "Add company"}</button>
+      </form>
+      {msg && <p className="msg">{msg}</p>}
+
+      <div className="view-head"><h3>Companies</h3><span className="muted">{logos.length}</span></div>
+      <div className="admin-list">
+        {logos.map((l, i) => (
+          <div key={l.id} className="admin-block">
+            <div className="admin-row logo-row">
+              <span className="ord">{i + 1}</span>
+              <img src={l.logo} alt="" />
+              <input value={l.name ?? ""} onChange={(e) => reload({ ...l, name: e.target.value })} />
+              <span className="muted">{(l.videos || []).length} videos · 👁 {l.views || 0}</span>
+              <button className="btn" onClick={() => saveName(l)}>Save</button>
+              <button className="btn" onClick={() => (editId === l.id ? setEditId(null) : startEdit(l))}>Videos</button>
+              <button className="btn" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
+              <button className="btn" onClick={() => move(i, 1)} disabled={i === logos.length - 1}>↓</button>
+              <button className="btn danger" onClick={() => remove(l)}>Delete</button>
+            </div>
+            {editId === l.id && (
+              <div className="edit-vids">
+                {editVids.map((u, vi) => (
+                  <div key={vi} className="vid-input-row">
+                    {thumb(u) && <img src={thumb(u)} onError={thumbFallback} alt="" />}
+                    <input value={u} onChange={(e) => setEditVids(editVids.map((x, xi) => xi === vi ? e.target.value : x))} />
+                    <button className="btn" onClick={() => setEditVids(editVids.filter((_, xi) => xi !== vi))}>✕</button>
+                  </div>
+                ))}
+                <button className="btn" onClick={() => setEditVids([...editVids, ""])}>+ Add video</button>
+                <button className="btn primary" onClick={() => saveVids(l)}>Save videos</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VideoManager({ videos, reload, setMsg, msg }) {
+  const [cat, setCat] = useState("ai");
+  const [fmt, setFmt] = useState("all");
+  const [form, setForm] = useState({ url: "", title: "", type: "short", category: "ai" });
+
+  const shown = videos
+    .filter((v) => v.category === cat && (fmt === "all" || v.type === fmt))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  async function addVideo(e) {
+    e.preventDefault();
+    if (!ytId(form.url)) { setMsg("Invalid YouTube URL"); return; }
+    const catDocs = videos.filter((v) => v.category === form.category);
+    const minOrder = catDocs.length ? Math.min(...catDocs.map((v) => v.order ?? 0)) : 0;
+    await addDoc(collection(db, "videos"), {
+      url: form.url, title: form.title, type: form.type, category: form.category,
+      order: minOrder - 1, views: 0, createdAt: serverTimestamp(),
+    });
+    setForm({ url: "", title: "", type: "short", category: form.category });
+    setMsg("Added.");
+    reload();
+  }
+
+  async function saveTitle(v) {
+    await updateDoc(doc(db, "videos", v.id), { title: v.title ?? "" });
+    setMsg("Saved.");
+  }
+
+  async function remove(v) {
+    if (!window.confirm(`Delete "${v.title || v.url}"?`)) return;
+    await deleteDoc(doc(db, "videos", v.id));
+    reload();
+  }
+
+  async function move(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= shown.length) return;
+    const a = shown[i], b = shown[j];
+    const ao = a.order ?? 0, bo = b.order ?? 0;
+    await updateDoc(doc(db, "videos", a.id), { order: bo });
+    await updateDoc(doc(db, "videos", b.id), { order: ao });
+    reload();
+  }
+
+  return (
+    <div>
+      <div className="view-head"><h3>Video Manager</h3><span className="muted">Total: {videos.length} · On home strip: {videos.filter((v) => v.category === "home").length}</span></div>
+      <form className="add-form" onSubmit={addVideo}>
+        <input placeholder="YouTube URL" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} required />
+        <input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+          <option value="short">Short</option>
+          <option value="long">Long</option>
+        </select>
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+          {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <button className="btn primary" type="submit">Add to Library</button>
+      </form>
+      {msg && <p className="msg">{msg}</p>}
+
+      <div className="cat-tabs">
+        {CATS.map((c) => (
+          <button key={c} className={c === cat ? "tab active" : "tab"} onClick={() => setCat(c)}>
+            {c} ({videos.filter((v) => v.category === c).length})
+          </button>
+        ))}
+        <select value={fmt} onChange={(e) => setFmt(e.target.value)}>
+          <option value="all">All Formats</option>
+          <option value="short">Shorts</option>
+          <option value="long">Long Videos</option>
+        </select>
+      </div>
+
+      <div className="admin-list">
+        {shown.map((v, i) => (
+          <div key={v.id} className="admin-row">
+            {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt="" />}
+            <input value={v.title ?? ""} onChange={(e) => reload({ ...v, title: e.target.value })} />
+            <span className="muted">👁 {v.views || 0}</span>
+            <button className="btn" onClick={() => saveTitle(v)}>Save</button>
+            <button className="btn" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
+            <button className="btn" onClick={() => move(i, 1)} disabled={i === shown.length - 1}>↓</button>
+            <button className="btn danger" onClick={() => remove(v)}>Delete</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ user }) {
+  const [view, setView] = useState("analytics");
+  const [videos, setVideos] = useState([]);
+  const [logos, setLogos] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [notifs, setNotifs] = useState([]);
+  const [cvViews, setCvViews] = useState(0);
+  const [msg, setMsg] = useState("");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  async function reload(localEdit) {
+    if (localEdit) {
+      if (localEdit.url !== undefined) setVideos((vs) => vs.map((v) => (v.id === localEdit.id ? localEdit : v)));
+      else setLogos((ls) => ls.map((l) => (l.id === localEdit.id ? localEdit : l)));
+      return;
+    }
+    const [v, l, a, n, cv] = await Promise.all([
+      getDocs(collection(db, "videos")),
+      getDocs(collection(db, "Logos")),
+      getDocs(collection(db, "analytics")),
+      getDocs(collection(db, "notifications")),
+      getDocs(collection(db, "Cv")),
+    ]);
+    setVideos(v.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setLogos(l.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (x.order ?? 0) - (y.order ?? 0)));
+    setEvents(a.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setNotifs(n.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => tsOf(y) - tsOf(x)));
+    const cvDoc = cv.docs.find((d) => d.id === CV_DOC) || cv.docs[0];
+    setCvViews(cvDoc ? cvDoc.data().views || 0 : 0);
+    setRefreshedAt(new Date().toLocaleTimeString());
+    setLoading(false);
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function markAllRead() {
+    await Promise.all(notifs.filter((n) => !n.read).map((n) => updateDoc(doc(db, "notifications", n.id), { read: true })));
+    reload();
+  }
+
+  const unread = notifs.filter((n) => !n.read).length;
+  const MENU = [
+    ["analytics", "Analytics"],
+    ["logos", "Logos"],
+    ["videos", "Video Manager"],
+    ["vanalytics", "Video Analytics"],
+  ];
+
+  return (
+    <div className="dash">
+      <aside className="side">
+        <h2>Kbany Dashboard</h2>
+        <p className="muted side-label">MAIN MENU</p>
+        {MENU.map(([k, label]) => (
+          <button key={k} className={view === k ? "side-btn active" : "side-btn"} onClick={() => setView(k)}>{label}</button>
+        ))}
+        <Link className="side-btn" to="/">Back to home</Link>
+        <button className="side-btn" onClick={() => setNotifOpen(!notifOpen)}>
+          Notifications {unread > 0 && <span className="badge">{unread}</span>}
+        </button>
+        <button className="side-btn" onClick={() => reload()}>↻ Refresh</button>
+        <button className="side-btn" onClick={() => signOut(auth)}>Logout</button>
+      </aside>
+      <main className="dash-main">
+        {notifOpen && (
+          <div className="panel notif-panel">
+            <div className="view-head"><h4>Notifications</h4>{unread > 0 && <button className="btn" onClick={markAllRead}>Mark all read</button>}</div>
+            {notifs.length === 0 && <p className="muted">No notifications yet.</p>}
+            {notifs.slice(0, 30).map((n) => (
+              <div key={n.id} className={n.read ? "feed-row read" : "feed-row"}>
+                <span className="feed-icon">{n.icon || "🔔"}</span>
+                <span className="feed-text">{n.message || n.title}</span>
+                <span className="feed-time">{relTime(tsOf(n))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {loading ? <p>Loading…</p> : (
+          <>
+            {view === "analytics" && <AnalyticsView events={events} videos={videos} logos={logos} cvViews={cvViews} refreshedAt={refreshedAt} />}
+            {view === "vanalytics" && <VideoAnalytics videos={videos} events={events} refreshedAt={refreshedAt} />}
+            {view === "logos" && <LogosManager logos={logos} reload={reload} setMsg={setMsg} msg={msg} />}
+            {view === "videos" && <VideoManager videos={videos} reload={reload} setMsg={setMsg} msg={msg} />}
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
 
 export default function Admin() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
-  const [cat, setCat] = useState("ai");
-  const [videos, setVideos] = useState([]);
-  const [form, setForm] = useState({ url: "", title: "", type: "short", category: "ai" });
   const [msg, setMsg] = useState("");
 
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setChecking(false); }), []);
-
-  useEffect(() => {
-    if (!user) return;
-    load();
-  }, [user, cat]);
-
-  async function load() {
-    const s = await getDocs(collection(db, "videos"));
-    const all = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setVideos(all.filter((v) => v.category === cat).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
-  }
 
   if (checking) return <div className="admin"><p>Loading…</p></div>;
 
@@ -52,81 +542,5 @@ export default function Admin() {
     );
   }
 
-  async function addVideo(e) {
-    e.preventDefault();
-    if (!ytId(form.url)) { setMsg("Invalid YouTube URL"); return; }
-    const sAll = await getDocs(collection(db, "videos"));
-    const catDocs = sAll.docs.map((d) => d.data()).filter((v) => v.category === form.category);
-    const minOrder = catDocs.length ? Math.min(...catDocs.map((v) => v.order ?? 0)) : 0;
-    await addDoc(collection(db, "videos"), {
-      url: form.url, title: form.title, type: form.type, category: form.category,
-      order: minOrder - 1, views: 0, createdAt: serverTimestamp(),
-    });
-    setForm({ url: "", title: "", type: "short", category: form.category });
-    setMsg("Added.");
-    if (form.category === cat) load();
-  }
-
-  async function saveTitle(v) {
-    await updateDoc(doc(db, "videos", v.id), { title: v.title ?? "" });
-    setMsg("Saved.");
-  }
-
-  async function remove(v) {
-    if (!window.confirm(`Delete "${v.title || v.url}"?`)) return;
-    await deleteDoc(doc(db, "videos", v.id));
-    load();
-  }
-
-  async function move(i, dir) {
-    const j = i + dir;
-    if (j < 0 || j >= videos.length) return;
-    const a = videos[i], b = videos[j];
-    const ao = a.order ?? 0, bo = b.order ?? 0;
-    await updateDoc(doc(db, "videos", a.id), { order: bo });
-    await updateDoc(doc(db, "videos", b.id), { order: ao });
-    load();
-  }
-
-  return (
-    <div className="admin">
-      <div className="admin-head">
-        <h3>Video Manager</h3>
-        <button className="btn" onClick={() => signOut(auth)}>Sign out</button>
-      </div>
-
-      <form className="add-form" onSubmit={addVideo}>
-        <input placeholder="YouTube URL" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} required />
-        <input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-          <option value="short">Short</option>
-          <option value="long">Long</option>
-        </select>
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-          {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <button className="btn primary" type="submit">Add to Library</button>
-      </form>
-      {msg && <p className="msg">{msg}</p>}
-
-      <div className="cat-tabs">
-        {CATS.map((c) => (
-          <button key={c} className={c === cat ? "tab active" : "tab"} onClick={() => setCat(c)}>{c} ({c === cat ? videos.length : "…"})</button>
-        ))}
-      </div>
-
-      <div className="admin-list">
-        {videos.map((v, i) => (
-          <div key={v.id} className="admin-row">
-            {thumb(v.url) && <img src={thumb(v.url)} alt="" />}
-            <input value={v.title ?? ""} onChange={(e) => setVideos(videos.map((x) => x.id === v.id ? { ...x, title: e.target.value } : x))} />
-            <button className="btn" onClick={() => saveTitle(v)}>Save</button>
-            <button className="btn" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
-            <button className="btn" onClick={() => move(i, 1)} disabled={i === videos.length - 1}>↓</button>
-            <button className="btn danger" onClick={() => remove(v)}>Delete</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <Dashboard user={user} />;
 }

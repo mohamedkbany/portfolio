@@ -10,27 +10,57 @@ export function visitorId() {
   return id;
 }
 
-export function trackVisit() {
-  if (sessionStorage.getItem("mk_visited")) return;
-  sessionStorage.setItem("mk_visited", "1");
+export function logEvent(type, extra = {}) {
   addDoc(collection(db, "analytics"), {
-    type: "visit",
+    type,
     visitorId: visitorId(),
     page: window.location.pathname,
     createdAt: serverTimestamp(),
+    ...extra,
   }).catch(() => {});
+}
+
+export function trackVisit() {
+  if (sessionStorage.getItem("mk_visited")) return;
+  sessionStorage.setItem("mk_visited", "1");
+  logEvent("visit");
+}
+
+let hbStarted = false;
+export function startHeartbeat() {
+  if (hbStarted) return;
+  hbStarted = true;
+  setInterval(() => {
+    if (document.visibilityState === "visible") logEvent("heartbeat");
+  }, 120000);
 }
 
 export function bumpVideoViews(videoId) {
   setDoc(doc(db, "videos", videoId), { views: increment(1) }, { merge: true }).catch(() => {});
 }
 
+export function trackVideoPlay(v) {
+  bumpVideoViews(v.id);
+  logEvent("video_play", {
+    videoId: v.id,
+    title: v.title || "",
+    category: v.category || "",
+    format: v.type || "",
+  });
+}
+
 export function bumpLogoViews(logoId) {
   setDoc(doc(db, "Logos", logoId), { views: increment(1) }, { merge: true }).catch(() => {});
 }
 
+export function trackLogoOpen(l) {
+  bumpLogoViews(l.id);
+  logEvent("brand_open", { logoId: l.id, name: l.name || "" });
+}
+
 export function trackCvDownload() {
   setDoc(doc(db, "Cv", CV_DOC), { views: increment(1) }, { merge: true }).catch(() => {});
+  logEvent("cv_download");
   addDoc(collection(db, "notifications"), {
     type: "cv",
     title: "CV Download",
