@@ -1,6 +1,21 @@
 import { db, CV_DOC } from "./firebase";
 import { doc, setDoc, addDoc, collection, serverTimestamp, increment } from "firebase/firestore";
 
+export function trackingDisabled() {
+  try {
+    return localStorage.getItem("mk_optout") === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+export function setTrackingOptOut(on) {
+  try {
+    if (on) localStorage.setItem("mk_optout", "1");
+    else localStorage.removeItem("mk_optout");
+  } catch (e) {}
+}
+
 export function visitorId() {
   let id = localStorage.getItem("mk_visitor_id");
   if (!id) {
@@ -11,6 +26,7 @@ export function visitorId() {
 }
 
 export function logEvent(type, extra = {}) {
+  if (trackingDisabled()) return;
   addDoc(collection(db, "analytics"), {
     type,
     visitorId: visitorId(),
@@ -21,6 +37,7 @@ export function logEvent(type, extra = {}) {
 }
 
 export function trackVisit() {
+  if (trackingDisabled()) return;
   if (sessionStorage.getItem("mk_visited")) return;
   sessionStorage.setItem("mk_visited", "1");
   logEvent("visit");
@@ -28,6 +45,7 @@ export function trackVisit() {
 
 let hbStarted = false;
 export function startHeartbeat() {
+  if (trackingDisabled()) return;
   if (hbStarted) return;
   hbStarted = true;
   setInterval(() => {
@@ -36,6 +54,7 @@ export function startHeartbeat() {
 }
 
 export function bumpVideoViews(videoId) {
+  if (trackingDisabled()) return;
   setDoc(doc(db, "videos", videoId), { views: increment(1) }, { merge: true }).catch(() => {});
 }
 
@@ -50,6 +69,7 @@ export function trackVideoPlay(v) {
 }
 
 export function bumpLogoViews(logoId) {
+  if (trackingDisabled()) return;
   setDoc(doc(db, "Logos", logoId), { views: increment(1) }, { merge: true }).catch(() => {});
 }
 
@@ -59,6 +79,7 @@ export function trackLogoOpen(l) {
 }
 
 export function trackCvDownload() {
+  if (trackingDisabled()) return;
   setDoc(doc(db, "Cv", CV_DOC), { views: increment(1) }, { merge: true }).catch(() => {});
   logEvent("cv_download");
   addDoc(collection(db, "notifications"), {

@@ -6,6 +6,7 @@ import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
 import { thumb, ytId, thumbFallback } from "../youtube";
+import { setTrackingOptOut } from "../analytics";
 
 const CATS = ["home", "ai", "motion", "editing", "tv"];
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/vgnnxs1g/image/upload";
@@ -517,7 +518,10 @@ export default function Admin() {
   const [checking, setChecking] = useState(true);
   const [msg, setMsg] = useState("");
 
-  useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setChecking(false); }), []);
+  useEffect(() => onAuthStateChanged(auth, (u) => {
+    if (u && u.email === ADMIN_EMAIL) setTrackingOptOut(true);
+    setUser(u); setChecking(false);
+  }), []);
 
   if (checking) return <div className="admin"><p>Loading…</p></div>;
 
