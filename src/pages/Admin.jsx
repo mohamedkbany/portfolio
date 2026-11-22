@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { db, auth, googleProvider, ADMIN_EMAIL, CV_DOC } from "../firebase";
 import { signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
@@ -7,6 +7,31 @@ import {
 } from "firebase/firestore";
 import { thumb, ytId, thumbFallback } from "../youtube";
 import { setTrackingOptOut } from "../analytics";
+
+
+function playDing() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = playDing.ctx || (playDing.ctx = new Ctx());
+    if (ctx.state === "suspended") ctx.resume();
+    const t = ctx.currentTime;
+    [880, 1174.66].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = f;
+      const start = t + i * 0.13;
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(start);
+      o.stop(start + 0.45);
+    });
+  } catch (e) {}
+}
 
 const CATS = ["home", "ai", "motion", "editing", "tv"];
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/vgnnxs1g/image/upload";
@@ -432,6 +457,14 @@ function Dashboard({ user }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [refreshedAt, setRefreshedAt] = useState("");
   const [loading, setLoading] = useState(true);
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return localStorage.getItem("mk_admin_sound") !== "0"; } catch (e) { return true; }
+  });
+  const soundRef = useRef(soundOn);
+  useEffect(() => {
+    soundRef.current = soundOn;
+    try { localStorage.setItem("mk_admin_sound", soundOn ? "1" : "0"); } catch (e) {}
+  }, [soundOn]);
 
   async function reload(localEdit) {
     if (localEdit) {
@@ -458,6 +491,30 @@ function Dashboard({ user }) {
 
   useEffect(() => { reload(); }, []);
 
+  const countsRef = useRef(null);
+  const interactedRef = useRef(false);
+  useEffect(() => {
+    const onGesture = () => { interactedRef.current = true; };
+    window.addEventListener("pointerdown", onGesture);
+    const tick = async () => {
+      try {
+        const [a, n] = await Promise.all([
+          getDocs(collection(db, "analytics")),
+          getDocs(collection(db, "notifications")),
+        ]);
+        const c = a.size + n.size;
+        if (countsRef.current === null) { countsRef.current = c; return; }
+        if (c > countsRef.current) {
+          countsRef.current = c;
+          if (soundRef.current && interactedRef.current) playDing();
+          reload();
+        }
+      } catch (e) {}
+    };
+    const iv = setInterval(tick, 15000);
+    return () => { clearInterval(iv); window.removeEventListener("pointerdown", onGesture); };
+  }, []);
+
   async function markAllRead() {
     await Promise.all(notifs.filter((n) => !n.read).map((n) => updateDoc(doc(db, "notifications", n.id), { read: true })));
     reload();
@@ -482,6 +539,9 @@ function Dashboard({ user }) {
         <Link className="side-btn" to="/">Back to home</Link>
         <button className="side-btn" onClick={() => setNotifOpen(!notifOpen)}>
           Notifications {unread > 0 && <span className="badge">{unread}</span>}
+        </button>
+        <button className="side-btn" onClick={() => { setSoundOn(!soundOn); if (!soundOn) setTimeout(playDing, 50); }}>
+          {soundOn ? "🔔 Sound: On" : "🔕 Sound: Off"}
         </button>
         <button className="side-btn" onClick={() => reload()}>↻ Refresh</button>
         <button className="side-btn" onClick={() => signOut(auth)}>Logout</button>
