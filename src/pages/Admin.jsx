@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { db, auth, googleProvider, ADMIN_EMAIL, CV_DOC } from "../firebase";
-import { signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
@@ -54,6 +54,48 @@ function relTime(ms) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+
+const OAUTH_CLIENT_ID = "341838685083-r2tvhqlr82mqnhtlqg0a5tr2apgv2nlf.apps.googleusercontent.com";
+
+function manualGoogleRedirect() {
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const nonce = Math.random().toString(36).slice(2);
+  try {
+    localStorage.setItem("mk_oauth_state", state);
+    localStorage.setItem("mk_oauth_nonce", nonce);
+  } catch (e) {}
+  const p = new URLSearchParams({
+    client_id: OAUTH_CLIENT_ID,
+    redirect_uri: location.origin + "/",
+    response_type: "id_token",
+    scope: "openid email profile",
+    state, nonce,
+    prompt: "select_account",
+  });
+  location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + p.toString();
+}
+
+function consumeGoogleRedirect(setMsg) {
+  if (!location.hash.includes("id_token=")) return;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const idToken = params.get("id_token");
+  const state = params.get("state");
+  let savedState = null, savedNonce = null;
+  try {
+    savedState = localStorage.getItem("mk_oauth_state");
+    savedNonce = localStorage.getItem("mk_oauth_nonce");
+    localStorage.removeItem("mk_oauth_state");
+    localStorage.removeItem("mk_oauth_nonce");
+  } catch (e) {}
+  history.replaceState(null, "", location.pathname);
+  if (!idToken) return;
+  if (savedState && state !== savedState) { setMsg("Sign-in could not be verified. Please try again."); return; }
+  try {
+    const payload = JSON.parse(atob(idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (savedNonce && payload.nonce !== savedNonce) { setMsg("Sign-in could not be verified. Please try again."); return; }
+  } catch (e) { setMsg("Sign-in could not be verified. Please try again."); return; }
+  signInWithCredential(auth, GoogleAuthProvider.credential(idToken)).catch((e) => setMsg(friendlyAuthError(e)));
+}
 
 function friendlyAuthError(e) {
   if (e && (e.code === "auth/missing-initial-state" || (e.message || "").includes("missing initial state"))) {
@@ -674,6 +716,7 @@ export default function Admin() {
   const [checking, setChecking] = useState(true);
   const [msg, setMsg] = useState("");
 
+  useEffect(() => { consumeGoogleRedirect(setMsg); }, []);
   useEffect(() => onAuthStateChanged(auth, (u) => {
     if (u && u.email === ADMIN_EMAIL) setTrackingOptOut(true);
     setUser(u); setChecking(false);
@@ -687,11 +730,15 @@ export default function Admin() {
         <h3>Admin</h3>
         <button className="btn primary" onClick={async () => {
           setMsg("");
+          if (/WhatsApp|Instagram|FBAN|FBAV|FB_IAB|LinkedInApp|Telegram|TikTok|Snapchat/i.test(navigator.userAgent)) {
+            manualGoogleRedirect();
+            return;
+          }
           try {
             await signInWithPopup(auth, googleProvider);
           } catch (e) {
-            if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(e.code)) {
-              signInWithRedirect(auth, googleProvider).catch((e2) => setMsg(friendlyAuthError(e2)));
+            if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported", "auth/internal-error", "auth/network-request-failed", "auth/missing-initial-state"].includes(e.code)) {
+              manualGoogleRedirect();
             } else if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
               setMsg(friendlyAuthError(e));
             }
