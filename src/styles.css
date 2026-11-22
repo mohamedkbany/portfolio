@@ -217,3 +217,13 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .ended-cta-text { font-size: 16px; margin: 6px 0 0; }
 .ended-cta { display: inline-block; padding: 12px 28px; border-radius: 30px; }
 @media (max-width: 650px) { .ended-card { width: 150px; } .ended-play { width: 36px; height: 36px; font-size: 15px; } }
+
+/* End overlay inside narrow 9:16 short players */
+.player.short .ended-overlay { gap: 8px; padding: 10px; }
+.player.short .ended-grid { gap: 6px; flex-wrap: nowrap; }
+.player.short .ended-card { width: 108px; flex: 0 0 auto; }
+.player.short .ended-card-title { display: none; }
+.player.short .ended-play { width: 30px; height: 30px; font-size: 12px; }
+.player.short .ended-title { font-size: 14px; }
+.player.short .ended-cta-text { font-size: 13px; margin: 0; }
+.player.short .ended-cta { padding: 8px 18px; font-size: 13px; }
