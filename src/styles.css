@@ -240,3 +240,5 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 /* Prominent WhatsApp button under the end-screen CTA */
 .ended-wa { display: flex; align-items: center; justify-content: center; width: 58px; height: 58px; border-radius: 50%; background: #25d366; color: #fff; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.45); }
 .player.short .ended-wa { width: 48px; height: 48px; }
+
+.player .mp4-mount { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: inherit; }

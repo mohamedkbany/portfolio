@@ -5,7 +5,11 @@ export function ytId(url) {
 }
 export function thumb(url) {
   const id = ytId(url);
-  return id ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : null;
+  if (id) return `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`;
+  if (/\.mp4(\?|$)/i.test(url || "") && url.includes("res.cloudinary.com")) {
+    return url.replace("/video/upload/", "/video/upload/so_0,w_400,h_711,c_fill/").replace(/\.mp4(\?.*)?$/i, ".jpg");
+  }
+  return null;
 }
 export function thumbFallback(e) {
   const img = e.target;

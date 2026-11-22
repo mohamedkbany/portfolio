@@ -16,7 +16,10 @@ function loadYT() {
   return apiPromise;
 }
 
+const isMp4Url = (u) => /\.mp4(\?|$)/i.test(u || "");
+
 export default function PlayerOverlay({ video, suggestions = [], onClose, onPick }) {
+  const isMp4 = isMp4Url(video.url);
   const mountRef = useRef(null);
   const wrapRef = useRef(null);
   const playerRef = useRef(null);
@@ -24,6 +27,13 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
 
   // Create the player once.
   useEffect(() => {
+    if (isMp4) {
+      const el0 = wrapRef.current;
+      if (el0 && el0.requestFullscreen) { try { el0.requestFullscreen().catch(() => {}); } catch (e) {} }
+      return () => {
+        if (document.fullscreenElement) { try { document.exitFullscreen().catch(() => {}); } catch (e) {} }
+      };
+    }
     let cancelled = false;
     loadYT().then((YT) => {
       if (cancelled || !mountRef.current) return;
@@ -61,7 +71,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
 
   // Swap video when a suggestion is picked.
   useEffect(() => {
-    if (playerRef.current && playerRef.current.loadVideoById) {
+    if (!isMp4 && playerRef.current && playerRef.current.loadVideoById) {
       setEnded(false);
       try {
         playerRef.current.loadVideoById(ytId(video.url));
@@ -83,7 +93,19 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
         <button className="close" onClick={close}>✕</button>
         {video.title && <p className="lightbox-title">{video.title}</p>}
         <div className={video.type === "short" ? "player short" : "player"}>
-          <div ref={mountRef} className="yt-mount" />
+          {isMp4 ? (
+            <video
+              className="mp4-mount"
+              src={video.url}
+              autoPlay
+              controls
+              playsInline
+              onEnded={() => setEnded(true)}
+              onPlay={() => setEnded(false)}
+            />
+          ) : (
+            <div ref={mountRef} className="yt-mount" />
+          )}
           {ended && (
             <div className="ended-overlay">
               {suggestions.length > 0 && (
