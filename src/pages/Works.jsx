@@ -23,7 +23,7 @@ export default function Works() {
     trackVisit();
     getDocs(collection(db, "videos")).then((s) => {
       const all = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setVideos(all.filter((v) => v.category === cat).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+      setVideos(all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
     }).catch(() => {});
     setPlaying(null);
   }, [cat]);
@@ -36,10 +36,12 @@ export default function Works() {
   }
 
   function suggestionsFor(v) {
-    const others = videos.filter((x) => x.id !== v.id);
-    const sameType = others.filter((x) => (x.type || "short") === (v.type || "short"));
-    const rest = others.filter((x) => (x.type || "short") !== (v.type || "short"));
-    return sameType.concat(rest).slice(0, 3);
+    const pool = videos.filter((x) => x.id !== v.id && (x.category === "ai" || x.category === "motion"));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, 3);
   }
 
   return (
@@ -51,7 +53,7 @@ export default function Works() {
         ))}
       </div>
       <div className={kind==="short"?"gallery shorts-gallery":"gallery"}>
-        {videos.filter(v=>(v.type||"short")===kind).map((v) => (
+        {videos.filter(v=>v.category===cat && (v.type||"short")===kind).map((v) => (
           <button key={v.id} className="card" onClick={() => open(v)}>
             {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             <span className="play">▶</span>
