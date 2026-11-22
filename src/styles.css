@@ -236,3 +236,7 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .brand-card img { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; background: #fff; }
 .brand-card span { bottom: 6px; right: 2px; }
 @media (max-width: 650px) { .brand-card img { width: 84px; height: 84px; } .logo-row { gap: 18px; } }
+
+/* Prominent WhatsApp button under the end-screen CTA */
+.ended-wa { display: flex; align-items: center; justify-content: center; width: 58px; height: 58px; border-radius: 50%; background: #25d366; color: #fff; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.45); }
+.player.short .ended-wa { width: 48px; height: 48px; }
