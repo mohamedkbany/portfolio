@@ -109,15 +109,24 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 @media(max-width:650px){.hero{display:block}.hero-logo{width:180px;height:180px;margin:24px auto}.hero h1{font-size:34px}.hero h2{font-size:21px}.tagline{font-size:16px}.hero-btns{margin-top:26px}.stats{display:grid;grid-template-columns:1fr 1fr}.stats strong{font-size:38px}.service-grid{grid-template-columns:1fr}.gallery{grid-template-columns:repeat(2,1fr);gap:12px}.works h3{font-size:36px}.card .play{width:44px;height:44px;font-size:18px}.brand{font-size:12px;letter-spacing:2px}.nav nav{font-size:10px;gap:12px}.brand-videos{grid-template-columns:1fr 1fr}.tab{padding:12px 20px}}
 
 /* Dashboard */
-.dash { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
-.side { background: var(--panel); border-right: 1px solid var(--line); padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
-.side h2 { font-size: 18px; margin-bottom: 14px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dash { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; background: #08080f; }
+.side { background: #0b0b13; border-right: 1px solid #1a1a26; padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
+.side h2 { font-size: 18px; margin-bottom: 14px; color: #fff; }
 .side-label { font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
-.side-btn { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--muted); padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-.side-btn:hover { color: var(--text); background: rgba(124,92,255,.08); }
-.side-btn.active { color: var(--text); background: linear-gradient(90deg, rgba(124,92,255,.25), rgba(0,212,255,.15)); }
-.badge { background: #e5486b; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 12px; margin-left: 6px; }
+.side-btn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; color: #8b90a5; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.side-btn:hover { color: #fff; background: rgba(124,92,255,.08); }
+.side-btn.active { color: #fff; background: #6c5ce7; }
+.side-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+.side-btn.notif-btn { border: 1px solid #1f1f2d; background: #10101c; border-radius: 10px; }
+.side-btn.logout-btn { color: #f43f5e; }
+.side-btn.logout-btn:hover { color: #ff5c7a; background: rgba(244,63,94,.08); }
+.head-icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(45,212,191,.12); color: #2dd4bf; margin-right: 10px; vertical-align: middle; }
+.view-head h3 { display: flex; align-items: center; }
+.line-chart { width: 100%; height: 200px; display: block; }
+.lc-day { fill: #8b90a5; font-size: 10px; }
+.badge { background: #f43f5e; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 12px; margin-left: 6px; }
 .dash-main { padding: 28px; max-width: 1000px; }
+.dash .panel, .dash .card { background: #0f0f18; border-color: #1f1f2d; }
 .view-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .muted { color: var(--muted); font-size: 13px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
@@ -242,3 +251,13 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .player.short .ended-wa { width: 48px; height: 48px; }
 
 .player .mp4-mount { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: inherit; }
+
+@media (max-width: 760px) {
+  .dash { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; align-items: center; padding: 12px; gap: 8px; }
+  .side h2, .side .side-label { display: none; }
+  .side-btn { width: auto; white-space: nowrap; padding: 8px 12px; }
+  .side-bottom { margin-top: 0; flex-direction: row; }
+  .dash-main { padding: 16px; max-width: none; }
+  .cards { grid-template-columns: 1fr 1fr; }
+}

@@ -21,7 +21,6 @@ function Nav() {
         <NavLink to="/works/motion">Motion</NavLink>
         <NavLink to="/works/editing">Editing</NavLink>
         <NavLink to="/works/tv">TV &amp; Broadcast</NavLink>
-        <NavLink to="/admin-218405">Admin</NavLink>
         <a className="cta" href={WA} target="_blank" rel="noreferrer">Let's Talk</a>
       </nav>
     </header>
@@ -62,6 +61,9 @@ function WhatsAppFloat() {
 
 export { WA, Nav, Footer, WhatsAppFloat };
 
+export const ADMIN_HOST = "mk-admin-7f3a9c.vercel.app";
+const isAdminHost = window.location.hostname === ADMIN_HOST;
+
 export default function App() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -72,7 +74,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/admin-218405" element={<Admin />} />
+        {isAdminHost && <Route path="*" element={<Admin />} />}
+        {!isAdminHost && <Route path="/admin-218405" element={<Navigate to="/" replace />} />}
         <Route
           path="*"
           element={

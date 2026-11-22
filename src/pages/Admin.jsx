@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { db, auth, googleProvider, ADMIN_EMAIL, CV_DOC } from "../firebase";
-import { signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
@@ -54,6 +54,33 @@ function relTime(ms) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+
+function friendlyAuthError(e) {
+  if (e && (e.code === "auth/missing-initial-state" || (e.message || "").includes("missing initial state"))) {
+    return "Sign-in was interrupted by this browser. Please tap the three dots menu and open this page in Chrome, then sign in again.";
+  }
+  return (e && e.message) || "Sign-in failed. Please try again.";
+}
+
+function Icn({ d }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
+const ICONS = {
+  analytics: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  logos: "M4 5h16v12H4zM4 13l4-4 5 5 3-3 4 4",
+  videos: "M3 5h13v14H3zM16 10l5-3v10l-5-3",
+  vanalytics: "M3 17l5-5 4 4 6-7 3 3",
+  home: "M3 11l9-8 9 8M5 10v10h14V10",
+  bell: "M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8M10 21a2 2 0 004 0",
+  refresh: "M21 12a9 9 0 11-2.6-6.4M21 4v5h-5",
+  sound: "M11 5L6 9H3v6h3l5 4zM15 9a4 4 0 010 6M18 6a8 8 0 010 12",
+  logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+};
+
 function BarChart({ data, label }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
@@ -68,6 +95,31 @@ function BarChart({ data, label }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function LineChart({ data, label }) {
+  const W = 700, H = 180, P = 8;
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const pts = data.map((d, i) => [P + (i * (W - 2 * P)) / (data.length - 1), H - P - (d.value / max) * (H - 2 * P - 20)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const area = line + ` L${pts[pts.length - 1][0].toFixed(1)} ${H - P} L${pts[0][0].toFixed(1)} ${H - P} Z`;
+  return (
+    <div className="chart">
+      <p className="chart-label">{label}</p>
+      <svg viewBox={`0 0 ${W} ${H + 18}`} className="line-chart" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lc-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#2dd4bf" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#lc-fill)" stroke="none" />
+        <path d={line} fill="none" stroke="#2dd4bf" strokeWidth="2.5" />
+        {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3.5" fill="#0b0b13" stroke="#2dd4bf" strokeWidth="2" />)}
+        {data.map((d, i) => <text key={d.key} x={pts[i][0]} y={H + 12} textAnchor="middle" className="lc-day">{d.key.slice(5)}</text>)}
+      </svg>
     </div>
   );
 }
@@ -113,7 +165,7 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
 
   return (
     <div>
-      <div className="view-head"><h3>Analytics</h3><span className="muted">Updated {refreshedAt}</span></div>
+      <div className="view-head"><h3><span className="head-icon"><Icn d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></span>Analytics</h3><span className="muted">Updated {refreshedAt}</span></div>
       <p className="muted">Website traffic overview</p>
       <div className="cards">
         <div className="card"><span>Total Visits</span><strong>{visits.length}</strong></div>
@@ -136,7 +188,7 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
 
       <div className="panel">
         <h4>Daily visits</h4>
-        <BarChart data={last14(events, "visit")} label="Last 14 days" />
+        <LineChart data={last14(events, "visit")} label="Last 14 days" />
       </div>
 
       <div className="panel">
@@ -184,7 +236,7 @@ function VideoAnalytics({ videos, events, refreshedAt }) {
 
   return (
     <div>
-      <div className="view-head"><h3>Video Performance</h3><span className="muted">Updated {refreshedAt}</span></div>
+      <div className="view-head"><h3><span className="head-icon"><Icn d="M3 17l5-5 4 4 6-7 3 3" /></span>Video Performance</h3><span className="muted">Updated {refreshedAt}</span></div>
       <p className="muted">Track your portfolio videos and discover which ones attract the most attention.</p>
 
       <div className="cards">
@@ -576,17 +628,19 @@ function Dashboard({ user }) {
         <h2>Kbany Dashboard</h2>
         <p className="muted side-label">MAIN MENU</p>
         {MENU.map(([k, label]) => (
-          <button key={k} className={view === k ? "side-btn active" : "side-btn"} onClick={() => setView(k)}>{label}</button>
+          <button key={k} className={view === k ? "side-btn active" : "side-btn"} onClick={() => setView(k)}><Icn d={ICONS[k]} />{label}</button>
         ))}
-        <Link className="side-btn" to="/">Back to home</Link>
-        <button className="side-btn" onClick={() => setNotifOpen(!notifOpen)}>
-          Notifications {unread > 0 && <span className="badge">{unread}</span>}
-        </button>
-        <button className="side-btn" onClick={() => { setSoundOn(!soundOn); if (!soundOn) setTimeout(playDing, 50); }}>
-          {soundOn ? "🔔 Sound: On" : "🔕 Sound: Off"}
-        </button>
-        <button className="side-btn" onClick={() => reload()}>↻ Refresh</button>
-        <button className="side-btn" onClick={() => signOut(auth)}>Logout</button>
+        <Link className="side-btn" to="/"><Icn d={ICONS.home} />Back to home</Link>
+        <div className="side-bottom">
+          <button className="side-btn notif-btn" onClick={() => setNotifOpen(!notifOpen)}>
+            <Icn d={ICONS.bell} />Notifications {unread > 0 && <span className="badge">{unread}</span>}
+          </button>
+          <button className="side-btn" onClick={() => { setSoundOn(!soundOn); if (!soundOn) setTimeout(playDing, 50); }}>
+            <Icn d={ICONS.sound} />Sound: {soundOn ? "On" : "Off"}
+          </button>
+          <button className="side-btn" onClick={() => reload()}><Icn d={ICONS.refresh} />Refresh</button>
+          <button className="side-btn logout-btn" onClick={() => signOut(auth)}><Icn d={ICONS.logout} />Logout</button>
+        </div>
       </aside>
       <main className="dash-main">
         {notifOpen && (
@@ -631,7 +685,18 @@ export default function Admin() {
     return (
       <div className="admin login">
         <h3>Admin</h3>
-        <button className="btn primary" onClick={() => signInWithRedirect(auth, googleProvider).catch((e) => setMsg(e.message))}>
+        <button className="btn primary" onClick={async () => {
+          setMsg("");
+          try {
+            await signInWithPopup(auth, googleProvider);
+          } catch (e) {
+            if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(e.code)) {
+              signInWithRedirect(auth, googleProvider).catch((e2) => setMsg(friendlyAuthError(e2)));
+            } else if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
+              setMsg(friendlyAuthError(e));
+            }
+          }
+        }}>
           Sign in with Google
         </button>
         {msg && <p className="error">{msg}</p>}
