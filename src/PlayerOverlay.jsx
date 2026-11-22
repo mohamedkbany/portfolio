@@ -42,6 +42,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
           },
         },
       });
+      window.__mkPlayer = playerRef.current;
     });
     const el = wrapRef.current;
     if (el && el.requestFullscreen) {
