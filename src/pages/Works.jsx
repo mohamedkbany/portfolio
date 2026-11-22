@@ -3,7 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, trackVideoPlay } from "../analytics";
-import { thumb, embedUrl, thumbFallback } from "../youtube";
+import { thumb, thumbFallback } from "../youtube";
+import PlayerOverlay from "../PlayerOverlay";
 
 const CATS = [
   { key: "ai", label: "AI Creative Solutions" },
@@ -34,6 +35,13 @@ export default function Works() {
     trackVideoPlay(v);
   }
 
+  function suggestionsFor(v) {
+    const others = videos.filter((x) => x.id !== v.id);
+    const sameType = others.filter((x) => (x.type || "short") === (v.type || "short"));
+    const rest = others.filter((x) => (x.type || "short") !== (v.type || "short"));
+    return sameType.concat(rest).slice(0, 3);
+  }
+
   return (
     <section className="works"><Link to="/" className="back-btn">← Back</Link>
       <h3>{{ai:"AI Works",motion:"Motion Works",editing:"Editing Works",tv:"TV & Broadcast Works"}[cat]}</h3>
@@ -54,20 +62,12 @@ export default function Works() {
       </div>
 
       {playing && (
-        <div className="lightbox" onClick={() => setPlaying(null)}>
-          <div className="lightbox-inner" onClick={(e) => e.stopPropagation()}>
-            <button className="close" onClick={() => setPlaying(null)}>✕</button>
-            {playing.title && <p className="lightbox-title">{playing.title}</p>}
-            <div className={playing.type === "short" ? "player short" : "player"}>
-              <iframe
-                src={embedUrl(playing.url)}
-                title={playing.title || "video"}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        </div>
+        <PlayerOverlay
+          video={playing}
+          suggestions={suggestionsFor(playing)}
+          onClose={() => setPlaying(null)}
+          onPick={(v) => { setPlaying(v); trackVideoPlay(v); }}
+        />
       )}
     </section>
   );

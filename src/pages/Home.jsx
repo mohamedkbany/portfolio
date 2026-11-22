@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, trackCvDownload, trackLogoOpen } from "../analytics";
-import { thumb, embedUrl, thumbFallback } from "../youtube";
+import { thumb, thumbFallback } from "../youtube";
+import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
 
 const SERVICES = [
@@ -91,7 +92,7 @@ export default function Home() {
       </section>
 
 
-      {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <div className="player"><iframe src={embedUrl(playing)} title={brand.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} onError={thumbFallback} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
+      {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <PlayerOverlay video={{ url: playing, title: brand.name }} suggestions={(brand.videos || []).filter((u) => u !== playing).slice(0, 3).map((u) => ({ url: u, title: brand.name }))} onClose={() => setPlaying(null)} onPick={(v) => setPlaying(v.url)} /> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} onError={thumbFallback} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
     </>
   );
 }
