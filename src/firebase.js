@@ -3,7 +3,7 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import config from "./firebase-config.json";
 
-const app = initializeApp(config);
+const app = initializeApp({ ...config, authDomain: "portfolio-gold-alpha-20.vercel.app" });
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
