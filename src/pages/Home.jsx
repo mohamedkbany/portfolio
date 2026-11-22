@@ -7,6 +7,18 @@ import { thumb, thumbFallback } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
 
+function downloadCv(e) {
+  e.preventDefault();
+  trackCvDownload();
+  const a = document.createElement("a");
+  a.href = "/mohamed_kbany.pdf";
+  a.download = "Mohamed_Kbany_CV.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => window.open("/mohamed_kbany.pdf", "_blank", "noopener"), 900);
+}
+
 const SERVICES = [
   { n: "01", title: "AI Creative Solutions", desc: "AI-powered workflows that accelerate production and unlock new creative possibilities.", img: "/ai.webp", cat: "ai" },
   { n: "02", title: "Motion Magic", desc: "Cinematic motion graphics that strengthen brand identity and enhance clarity.", img: "/motion.webp", cat: "motion" },
@@ -39,7 +51,7 @@ export default function Home() {
         <p className="tagline">Cinematic Edits • AI-Generated Videos • Creative Motion Design • Visual Storytelling That Captures Attention</p>
         <div className="hero-btns">
           <Link className="btn primary" to="/works">View My Works</Link>
-          <a className="btn" href="/mohamed_kbany.pdf" target="_blank" rel="noreferrer" onClick={trackCvDownload}>Download CV</a>
+          <a className="btn" href="/mohamed_kbany.pdf" onClick={downloadCv}>Download CV</a>
         </div>
 
         </div><img className="hero-logo" src="/logo.webp" alt="Mohamed Kbany logo" />
