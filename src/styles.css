@@ -181,3 +181,13 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .logo-row { grid-template-columns: 20px 54px minmax(90px,1fr) auto auto auto auto auto auto; gap: 6px; font-size: 13px; }
 .logo-row img { width: 54px; height: 36px; }
 .logo-row .btn { padding: 8px 10px; font-size: 13px; }
+
+/* row wrap fixes */
+.logo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.logo-row input { flex: 1 1 130px; min-width: 110px; }
+.logo-row .muted { white-space: nowrap; }
+.add-form { display: flex !important; flex-wrap: wrap; gap: 8px; }
+.add-form input, .add-form select { flex: 1 1 160px; min-width: 0; }
+.add-form .vid-input-row { flex: 1 1 100%; }
+.admin-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.admin-row input { flex: 1 1 140px; min-width: 100px; }
