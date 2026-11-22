@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db, auth, googleProvider, ADMIN_EMAIL } from "../firebase";
-import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from "firebase/firestore";
@@ -35,7 +35,7 @@ export default function Admin() {
     return (
       <div className="admin login">
         <h3>Admin</h3>
-        <button className="btn primary" onClick={() => signInWithPopup(auth, googleProvider).catch((e) => setMsg(e.message))}>
+        <button className="btn primary" onClick={() => signInWithRedirect(auth, googleProvider).catch((e) => setMsg(e.message))}>
           Sign in with Google
         </button>
         {msg && <p className="error">{msg}</p>}
