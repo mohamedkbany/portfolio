@@ -16,6 +16,7 @@ export default function Works() {
   const { cat = "ai" } = useParams();
   const [videos, setVideos] = useState([]);
   const [playing, setPlaying] = useState(null);
+  const [kind, setKind] = useState("short");
 
   useEffect(() => {
     trackVisit();
@@ -34,15 +35,15 @@ export default function Works() {
   }
 
   return (
-    <section className="works">
-      <h3>{current.label}</h3>
-      <div className="cat-tabs">
+    <section className="works"><Link to="/" className="back-btn">← Back</Link>
+      <h3>{{ai:"AI Works",motion:"Motion Works",editing:"Editing Works",tv:"TV & Broadcast Works"}[cat]}</h3>
+      <div className="cat-tabs"><button className={kind==="short"?"tab active":"tab"} onClick={()=>setKind("short")}>Short Videos</button><button className={kind==="long"?"tab active":"tab"} onClick={()=>setKind("long")}>Long Videos</button></div><div className="category-links">
         {CATS.map((c) => (
           <Link key={c.key} to={`/works/${c.key}`} className={c.key === cat ? "tab active" : "tab"}>{c.label}</Link>
         ))}
       </div>
-      <div className="gallery">
-        {videos.map((v) => (
+      <div className={kind==="short"?"gallery shorts-gallery":"gallery"}>
+        {videos.filter(v=>(v.type||"short")===kind).map((v) => (
           <button key={v.id} className="card" onClick={() => open(v)}>
             {thumb(v.url) && <img src={thumb(v.url)} alt={v.title || "video"} loading="lazy" />}
             <span className="play">▶</span>

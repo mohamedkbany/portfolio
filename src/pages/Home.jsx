@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
-import { trackVisit, trackCvDownload } from "../analytics";
-import { thumb } from "../youtube";
+import { trackVisit, trackCvDownload, bumpLogoViews } from "../analytics";
+import { thumb, embedUrl } from "../youtube";
 import { WA } from "../App";
 
 const SERVICES = [
@@ -16,6 +16,8 @@ const SERVICES = [
 export default function Home() {
   const [homeVids, setHomeVids] = useState([]);
   const [logos, setLogos] = useState([]);
+  const [brand, setBrand] = useState(null);
+  const [playing, setPlaying] = useState(null);
 
   useEffect(() => {
     trackVisit();
@@ -30,7 +32,7 @@ export default function Home() {
 
   return (
     <>
-      <section className="hero">
+      <section className="hero"><div className="hero-copy">
         <h1>Professional Video Editing</h1>
         <h2>AI Creator &amp; Motion Magic Specialist</h2>
         <p className="tagline">Cinematic Edits • AI-Generated Videos • Creative Motion Design • Visual Storytelling That Captures Attention</p>
@@ -38,14 +40,24 @@ export default function Home() {
           <Link className="btn primary" to="/works">View My Works</Link>
           <a className="btn" href="/mohamed_kbany.pdf" target="_blank" rel="noreferrer" onClick={trackCvDownload}>Download CV</a>
         </div>
+
+        </div><img className="hero-logo" src="/logo.webp" alt="Mohamed Kbany logo" />
+      </section>
+
+      <section className="brands">
+        <p className="hint">Explore projects and creative work for each brand.</p>
+        <div className="logo-row">
+          {logos.map((l) => (
+            <button key={l.id} className="brand-card" onClick={() => {setBrand(l); setPlaying(null); bumpLogoViews(l.id);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
+          ))}
+        </div>
+      </section>
         <div className="stats">
           <div><strong>5+</strong><span>Years of experience</span></div>
           <div><strong>550+</strong><span>Projects completed</span></div>
           <div><strong>95%</strong><span>Performance Rate</span></div>
           <div><strong>250+</strong><span>Happy Clients</span></div>
         </div>
-      </section>
-
       <section className="services">
         <p className="kicker">WHAT I DO</p>
         <h3>Services</h3>
@@ -78,14 +90,8 @@ export default function Home() {
         <Link className="btn primary" to="/works">CLICK TO VIEW MY WORKS</Link>
       </section>
 
-      <section className="brands">
-        <p className="hint">Explore projects and creative work for each brand.</p>
-        <div className="logo-row">
-          {logos.map((l) => (
-            <img key={l.id} src={l.logo} alt={l.name || "brand"} loading="lazy" />
-          ))}
-        </div>
-      </section>
+
+      {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <div className="player"><iframe src={embedUrl(playing)} title={brand.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
     </>
   );
 }
