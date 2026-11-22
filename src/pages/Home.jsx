@@ -48,8 +48,8 @@ export default function Home() {
       <section className="brands">
         <p className="hint">Explore projects and creative work for each brand.</p>
         <div className="logo-row">
-          {logos.map((l) => (
-            <button key={l.id} className="brand-card" onClick={() => {setBrand(l); setPlaying(null); trackLogoOpen(l);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
+          {logos.concat(logos).map((l, i) => (
+            <button key={l.id + "-" + i} className="brand-card" aria-hidden={i >= logos.length} tabIndex={i >= logos.length ? -1 : 0} onClick={() => {setBrand(l); setPlaying(null); trackLogoOpen(l);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
           ))}
         </div>
       </section>
