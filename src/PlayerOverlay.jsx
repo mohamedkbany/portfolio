@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ytId, thumb, thumbFallback } from "./youtube";
+import { trackWatch } from "./analytics";
 import { WA } from "./App";
 
 let apiPromise = null;
@@ -24,6 +25,15 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
   const wrapRef = useRef(null);
   const playerRef = useRef(null);
   const [ended, setEnded] = useState(false);
+  const watchRef = useRef(0);
+  const reportedRef = useRef(false);
+  const endedRef = useRef(false);
+
+  function reportWatch(completed, followed) {
+    if (reportedRef.current) return;
+    reportedRef.current = true;
+    if (watchRef.current >= 2) trackWatch(video, watchRef.current, completed, followed);
+  }
 
   // Create the player once.
   useEffect(() => {
@@ -47,19 +57,26 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
           onStateChange: (e) => {
             try {
               if (e.data === 1) { e.target.unMute(); }
-              if (e.data === 0) setEnded(true);
+              if (e.data === 0) { setEnded(true); endedRef.current = true; }
             } catch (err) {}
           },
         },
       });
       window.__mkPlayer = playerRef.current;
     });
+    const watchTick = setInterval(() => {
+      try {
+        const p = playerRef.current;
+        if (p && p.getPlayerState && p.getPlayerState() === 1) watchRef.current = p.getCurrentTime();
+      } catch (e) {}
+    }, 1000);
     const el = wrapRef.current;
     if (el && el.requestFullscreen) {
       try { el.requestFullscreen().catch(() => {}); } catch (e) {}
     }
     return () => {
       cancelled = true;
+      clearInterval(watchTick);
       try { playerRef.current && playerRef.current.destroy(); } catch (e) {}
       playerRef.current = null;
       if (document.fullscreenElement) {
@@ -81,6 +98,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
   }, [video.url]);
 
   function close() {
+    reportWatch(endedRef.current, false);
     if (document.fullscreenElement) {
       try { document.exitFullscreen().catch(() => {}); } catch (e) {}
     }
@@ -100,7 +118,8 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
               autoPlay
               controls
               playsInline
-              onEnded={() => setEnded(true)}
+              onTimeUpdate={(e) => { watchRef.current = e.currentTarget.currentTime; }}
+              onEnded={() => { setEnded(true); endedRef.current = true; }}
               onPlay={() => setEnded(false)}
             />
           ) : (
@@ -113,7 +132,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
                   <p className="ended-title">Watch next</p>
                   <div className="ended-grid">
                     {suggestions.slice(0, 3).map((s, i) => (
-                      <button key={s.url + i} className="ended-card" onClick={() => onPick(s)}>
+                      <button key={s.url + i} className="ended-card" onClick={() => { reportWatch(true, true); onPick(s); }}>
                         <img src={thumb(s.url)} onError={thumbFallback} alt={s.title || "video"} />
                         <span className="ended-play">▶</span>
                         {s.title && <span className="ended-card-title">{s.title}</span>}

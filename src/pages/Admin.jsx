@@ -166,6 +166,22 @@ function VideoAnalytics({ videos, events, refreshedAt }) {
   const shorts = videos.filter((v) => v.type === "short").length;
   const longs = videos.filter((v) => v.type !== "short").length;
 
+  const watchEvents = events.filter((e) => e.type === "video_watch");
+  const watchByVideo = {};
+  watchEvents.forEach((e) => {
+    const k = e.videoId || "?";
+    const w = (watchByVideo[k] = watchByVideo[k] || { title: e.title || k, n: 0, secs: 0, done: 0, cont: 0 });
+    w.n += 1;
+    w.secs += e.seconds || 0;
+    if (e.completed) w.done += 1;
+    if (e.followed) w.cont += 1;
+  });
+  const watchRows = Object.values(watchByVideo).sort((a, b) => b.n - a.n);
+  const sessions = watchEvents
+    .slice()
+    .sort((a, b) => tsOf(b) - tsOf(a))
+    .slice(0, 50);
+
   return (
     <div>
       <div className="view-head"><h3>Video Performance</h3><span className="muted">Updated {refreshedAt}</span></div>
@@ -196,6 +212,32 @@ function VideoAnalytics({ videos, events, refreshedAt }) {
       <div className="panel">
         <h4>Plays per day</h4>
         <BarChart data={last14(events, "video_play")} label="Last 14 days" />
+      </div>
+
+      <div className="panel">
+        <h4>Watch depth per video</h4>
+        {watchRows.length === 0 && <p className="muted">No watch data yet.</p>}
+        {watchRows.map((w) => (
+          <div key={w.title} className="top-row">
+            <div className="top-info">
+              <strong>{w.title}</strong>
+              <span className="muted">{w.n} watches · avg {Math.round(w.secs / w.n)}s</span>
+            </div>
+            <span className="top-views">{Math.round((w.done / w.n) * 100)}% finished · {Math.round((w.cont / w.n) * 100)}% continued</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel">
+        <h4>Visitor watch sessions</h4>
+        {sessions.length === 0 && <p className="muted">No sessions yet.</p>}
+        {sessions.map((e) => (
+          <div key={e.id} className="feed-row">
+            <span className="feed-icon">{e.completed ? "✅" : "⏱"}</span>
+            <span className="feed-text">{e.title || e.videoId} — {e.seconds}s{e.completed ? " (finished)" : ""}{e.followed ? " → kept watching" : ""}</span>
+            <span className="feed-time">{relTime(tsOf(e))}</span>
+          </div>
+        ))}
       </div>
 
       <div className="panel">

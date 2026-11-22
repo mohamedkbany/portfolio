@@ -91,3 +91,15 @@ export function trackCvDownload() {
     createdAt: serverTimestamp(),
   }).catch(() => {});
 }
+
+export function trackWatch(v, seconds, completed, followed) {
+  if (trackingDisabled()) return;
+  logEvent("video_watch", {
+    videoId: v.id || v.url || "",
+    title: v.title || "",
+    category: v.category || "",
+    seconds: Math.round(seconds),
+    completed: !!completed,
+    followed: !!followed,
+  });
+}
