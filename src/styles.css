@@ -195,3 +195,6 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .dash { grid-template-columns: 230px minmax(0, 1fr); }
 
 .logo-row input { flex: 0 1 220px; }
+
+.logo-row .btn { padding: 8px 8px; font-size: 12px; }
+.logo-row { gap: 6px; }
