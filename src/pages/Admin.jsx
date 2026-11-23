@@ -205,7 +205,22 @@ function last14(events, type) {
 
 function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
   const now = Date.now();
-  const visits = events.filter((e) => e.type === "visit");
+  // Bot bursts (>=2 fresh visitor IDs within 15s, no engagement anywhere) are
+  // hidden from every number and from the feed, even before the 30-min sweep
+  // deletes them from Firestore. A visitor with ANY engagement is never a bot.
+  const botIds = (() => {
+    const vs = events.filter((e) => e.type === "visit" && e.createdAt);
+    const engaged = new Set(events.filter((e) => e.type && e.type !== "visit").map((e) => e.visitorId));
+    const bots = new Set();
+    for (const v of vs) {
+      const t = tsOf(v);
+      const near = new Set(vs.filter((x) => Math.abs(tsOf(x) - t) <= 15000).map((x) => x.visitorId));
+      if (near.size >= 2) near.forEach((id) => { if (!engaged.has(id)) bots.add(id); });
+    }
+    return bots;
+  })();
+  const shown = events.filter((e) => !botIds.has(e.visitorId));
+  const visits = shown.filter((e) => e.type === "visit");
   const todayKey = dayKey(now);
   const yKey = dayKey(now - DAY);
   const monthKey = todayKey.slice(0, 7);
@@ -214,14 +229,14 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
   const month = visits.filter((e) => dayKey(tsOf(e)).startsWith(monthKey)).length;
   const videoViews = videos.reduce((a, v) => a + (v.views || 0), 0);
   const brandOpens = logos.reduce((a, l) => a + (l.views || 0), 0);
-  const online = new Set(events.filter((e) => now - tsOf(e) < 5 * 60000).map((e) => e.visitorId)).size;
+  const online = new Set(shown.filter((e) => now - tsOf(e) < 5 * 60000).map((e) => e.visitorId)).size;
   const diff = today - yesterday;
   const pct = yesterday ? Math.round((diff / yesterday) * 100) : (today ? 100 : 0);
 
-  const feed = [...events].sort((a, b) => tsOf(b) - tsOf(a)).slice(0, 25);
+  const feed = [...shown].sort((a, b) => tsOf(b) - tsOf(a)).slice(0, 25);
   const icon = { visit: "👁", video_play: "▶", brand_open: "🏢", cv_download: "📄", heartbeat: "💓" };
   const text = (e) => {
-    if (e.type === "visit") return `Visit on ${e.page || "/"}`;
+    if (e.type === "visit") return `Visit on ${e.page || "/"}${e.country ? ` · ${e.country}` : ""}`;
     if (e.type === "video_play") return `Played "${e.title || e.videoId}" (${e.category || "?"} ${e.format || ""})`;
     if (e.type === "brand_open") return `Opened brand "${e.name || "?"}"`;
     if (e.type === "cv_download") return "CV downloaded";
@@ -255,7 +270,7 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
 
       <div className="panel">
         <h4>Daily visits</h4>
-        <LineChart data={last14(events, "visit")} label="Last 14 days" />
+        <LineChart data={last14(shown, "visit")} label="Last 14 days" />
       </div>
 
       <div className="panel">
@@ -672,7 +687,7 @@ function Dashboard({ user }) {
     // the hourly sweep purges those; no point ringing for them).
     const ALERT_TYPES = { video_play: 1, video_watch: 1, brand_open: 1, cv_download: 1 };
     const describe = (e) => {
-      if (e.type === "visit") return `New visit on ${e.page || "/"}`;
+      if (e.type === "visit") return `New visit on ${e.page || "/"}${e.country ? ` · ${e.country}` : ""}`;
       if (e.type === "video_play") return `Video played: ${e.title || e.videoId || ""}`;
       if (e.type === "video_watch") return `Watched ${Math.round(e.seconds || 0)}s of ${e.title || "a video"}`;
       if (e.type === "brand_open") return `Brand opened: ${e.name || ""}`;
@@ -717,7 +732,10 @@ function Dashboard({ user }) {
         const stillPending = [];
         for (const p of pendingVisitsRef.current) {
           if (now - p.seenAt < 15000) { stillPending.push(p); continue; }
-          if (!isBurst(p.e)) { alertNow(describe(p.e)); alerted = true; }
+          // Re-read the event from the latest fetch: geo is merged in a moment
+          // after the visit write, so the fresh copy may carry the country.
+          const latest = all.find((x) => x.id === p.e.id) || p.e;
+          if (!isBurst(latest)) { alertNow(describe(latest)); alerted = true; }
         }
         pendingVisitsRef.current = stillPending;
         if (fresh.length || alerted || a.size + n.size !== countsRef.current) {

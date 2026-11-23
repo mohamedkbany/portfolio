@@ -1,5 +1,5 @@
 import { db, CV_DOC, FB_PROJECT_ID, FB_API_KEY } from "./firebase";
-import { doc, setDoc, addDoc, collection, serverTimestamp, increment } from "firebase/firestore";
+import { doc, setDoc, addDoc, updateDoc, collection, serverTimestamp, increment } from "firebase/firestore";
 
 // Honor ?notrack=1 / ?track=1 at module load, before any component effect runs,
 // so even the very first page view of a notrack link is never recorded.
@@ -33,15 +33,37 @@ export function visitorId() {
   return id;
 }
 
+// Country-level geo, resolved client-side right after a visit is logged and
+// merged into the visit's own document. Fire-and-forget: analytics never
+// blocks on this, and a failed lookup simply leaves the event without geo.
+async function attachGeo(ref) {
+  try {
+    let g = null;
+    try {
+      const j = await (await fetch("https://ipwho.is/")).json();
+      if (j && j.success !== false && j.country) g = { country: String(j.country), countryCode: String(j.country_code || ""), city: String(j.city || "") };
+    } catch (e) {}
+    if (!g) {
+      try {
+        const j = await (await fetch("https://ipapi.co/json/")).json();
+        if (j && j.country_name) g = { country: String(j.country_name), countryCode: String(j.country_code || ""), city: String(j.city || "") };
+      } catch (e) {}
+    }
+    if (g) await updateDoc(ref, g);
+  } catch (e) {}
+}
+
 export function logEvent(type, extra = {}) {
   if (trackingDisabled()) return;
-  addDoc(collection(db, "analytics"), {
+  const p = addDoc(collection(db, "analytics"), {
     type,
     visitorId: visitorId(),
     page: window.location.pathname,
     createdAt: serverTimestamp(),
     ...extra,
-  }).catch(() => {});
+  });
+  if (type === "visit") p.then((ref) => attachGeo(ref)).catch(() => {});
+  else p.catch(() => {});
 }
 
 export function trackVisit() {
