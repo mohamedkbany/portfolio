@@ -64,6 +64,34 @@ export { WA, Nav, Footer, WhatsAppFloat };
 export const ADMIN_HOST = "mk-admin-7f3a9c.vercel.app";
 const isAdminHost = window.location.hostname === ADMIN_HOST;
 
+// Arriving from the admin app (?from=admin): remember it for this tab session and
+// strip the param so shared links never leak the admin host.
+try {
+  const q = new URLSearchParams(window.location.search);
+  if (q.get("from") === "admin") {
+    sessionStorage.setItem("mk_from_admin", "1");
+    q.delete("from");
+    const clean = window.location.pathname + (q.toString() ? "?" + q.toString() : "") + window.location.hash;
+    window.history.replaceState(null, "", clean);
+  }
+} catch (e) {}
+
+function fromAdmin() {
+  try { return sessionStorage.getItem("mk_from_admin") === "1"; } catch (e) { return false; }
+}
+
+export function AdminPill() {
+  if (!fromAdmin()) return null;
+  return (
+    <a
+      href="https://mk-admin-7f3a9c.vercel.app"
+      style={{ position: "fixed", bottom: 18, left: 16, zIndex: 9998, background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "11px 18px", borderRadius: 999, fontWeight: 700, fontSize: 14, boxShadow: "0 8px 30px rgba(0,0,0,.45)", textDecoration: "none" }}
+    >
+      ← Back to Admin
+    </a>
+  );
+}
+
 export default function App() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -82,9 +110,9 @@ export default function App() {
           element={
             <>
               <Routes>
-                <Route path="/" element={<><Nav /><main><Home /></main><Footer /><WhatsAppFloat /></>} />
+                <Route path="/" element={<><Nav /><main><Home /></main><Footer /><WhatsAppFloat /><AdminPill /></>} />
                 <Route path="/works" element={<Navigate to="/works/ai" replace />} />
-                <Route path="/works/:cat" element={<Works />} />
+                <Route path="/works/:cat" element={<><Works /><AdminPill /></>} />
               </Routes>
             </>
           }

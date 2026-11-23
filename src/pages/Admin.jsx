@@ -731,7 +731,7 @@ function Dashboard({ user }) {
         {MENU.map(([k, label]) => (
           <button key={k} className={view === k ? "side-btn active" : "side-btn"} onClick={() => setView(k)}><Icn d={ICONS[k]} />{label}</button>
         ))}
-        <a className="side-btn" href="https://mohamedkbany.vercel.app"><Icn d={ICONS.home} />Back to home</a>
+        <a className="side-btn" href="https://mohamedkbany.vercel.app/?from=admin"><Icn d={ICONS.home} />Back to home</a>
         <div className="side-bottom">
           <button className="side-btn notif-btn" onClick={() => setNotifOpen(!notifOpen)}>
             <Icn d={ICONS.bell} />Notifications {unread > 0 && <span className="badge">{unread}</span>}
