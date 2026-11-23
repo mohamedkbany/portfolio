@@ -704,7 +704,7 @@ function Dashboard({ user }) {
           const t = (e.createdAt.seconds || 0) * 1000;
           const near = new Set(
             visitsNow
-              .filter((v) => Math.abs((v.createdAt.seconds || 0) * 1000 - t) <= 10000)
+              .filter((v) => Math.abs((v.createdAt.seconds || 0) * 1000 - t) <= 15000)
               .map((v) => v.visitorId)
           );
           return near.size >= 2;
@@ -716,7 +716,7 @@ function Dashboard({ user }) {
         }
         const stillPending = [];
         for (const p of pendingVisitsRef.current) {
-          if (now - p.seenAt < 12000) { stillPending.push(p); continue; }
+          if (now - p.seenAt < 15000) { stillPending.push(p); continue; }
           if (!isBurst(p.e)) { alertNow(describe(p.e)); alerted = true; }
         }
         pendingVisitsRef.current = stillPending;
