@@ -203,22 +203,27 @@ function last14(events, type) {
   return out;
 }
 
+// Bot-burst visitorIds: >=2 distinct visitorIds with visits inside a +/-15s
+// window and zero engagement events anywhere. Shared by Analytics and the
+// Notifications panel so bursts are invisible everywhere.
+function computeBotIds(events) {
+  const vs = events.filter((e) => e.type === "visit" && e.createdAt);
+  const engaged = new Set(events.filter((e) => e.type && e.type !== "visit").map((e) => e.visitorId));
+  const bots = new Set();
+  for (const v of vs) {
+    const t = tsOf(v);
+    const near = new Set(vs.filter((x) => Math.abs(tsOf(x) - t) <= 15000).map((x) => x.visitorId));
+    if (near.size >= 2) near.forEach((id) => { if (!engaged.has(id)) bots.add(id); });
+  }
+  return bots;
+}
+
 function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
   const now = Date.now();
   // Bot bursts (>=2 fresh visitor IDs within 15s, no engagement anywhere) are
   // hidden from every number and from the feed, even before the 30-min sweep
   // deletes them from Firestore. A visitor with ANY engagement is never a bot.
-  const botIds = (() => {
-    const vs = events.filter((e) => e.type === "visit" && e.createdAt);
-    const engaged = new Set(events.filter((e) => e.type && e.type !== "visit").map((e) => e.visitorId));
-    const bots = new Set();
-    for (const v of vs) {
-      const t = tsOf(v);
-      const near = new Set(vs.filter((x) => Math.abs(tsOf(x) - t) <= 15000).map((x) => x.visitorId));
-      if (near.size >= 2) near.forEach((id) => { if (!engaged.has(id)) bots.add(id); });
-    }
-    return bots;
-  })();
+  const botIds = computeBotIds(events);
   const shown = events.filter((e) => !botIds.has(e.visitorId));
   const visits = shown.filter((e) => e.type === "visit");
   const todayKey = dayKey(now);
@@ -753,11 +758,14 @@ function Dashboard({ user }) {
   }, []);
 
   async function markAllRead() {
-    await Promise.all(notifs.filter((n) => !n.read).map((n) => updateDoc(doc(db, "notifications", n.id), { read: true })));
+    await Promise.all(visibleNotifs.filter((n) => !n.read).map((n) => updateDoc(doc(db, "notifications", n.id), { read: true })));
     reload();
   }
 
-  const unread = notifs.filter((n) => !n.read).length;
+  // Hide burst-bot notification entries exactly like Analytics hides their events.
+  const botIds = computeBotIds(events);
+  const visibleNotifs = notifs.filter((n) => !n.visitorId || !botIds.has(n.visitorId));
+  const unread = visibleNotifs.filter((n) => !n.read).length;
   const MENU = [
     ["analytics", "Analytics"],
     ["logos", "Logos"],
@@ -781,7 +789,7 @@ function Dashboard({ user }) {
         <a className="side-btn" href="https://mohamedkbany.vercel.app/?from=admin"><Icn d={ICONS.home} />Back to home</a>
         <div className="side-bottom">
           <button className="side-btn notif-btn" onClick={() => setNotifOpen(!notifOpen)}>
-            <Icn d={ICONS.bell} />Notifications {unread > 0 && <span className="badge">{unread}</span>}
+            <span className="bell-wrap"><Icn d={ICONS.bell} />{unread > 0 && <span className="badge-dot">{unread > 9 ? "9+" : unread}</span>}</span>Notifications
           </button>
           <button className="side-btn" onClick={() => { setSoundOn(!soundOn); if (!soundOn) setTimeout(playDing, 50); }}>
             <Icn d={ICONS.sound} />Sound: {soundOn ? "On" : "Off"}
@@ -794,8 +802,8 @@ function Dashboard({ user }) {
         {notifOpen && (
           <div className="panel notif-panel">
             <div className="view-head"><h4>Notifications</h4>{unread > 0 && <button className="btn" onClick={markAllRead}>Mark all read</button>}</div>
-            {notifs.length === 0 && <p className="muted">No notifications yet.</p>}
-            {notifs.slice(0, 30).map((n) => (
+            {visibleNotifs.length === 0 && <p className="muted">No notifications yet.</p>}
+            {visibleNotifs.slice(0, 30).map((n) => (
               <div key={n.id} className={n.read ? "feed-row read" : "feed-row"}>
                 <span className="feed-icon">{n.icon || "🔔"}</span>
                 <span className="feed-text">{n.message || n.title}</span>

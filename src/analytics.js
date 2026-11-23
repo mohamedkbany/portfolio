@@ -66,11 +66,31 @@ export function logEvent(type, extra = {}) {
   else p.catch(() => {});
 }
 
+// Persist an admin Notifications entry for alert-worthy events. Written by the
+// visitor's browser so the record exists even when the admin panel is closed.
+// Burst visits are hidden in the panel (same bot filter as Analytics) and
+// purged by the sweep, so they never accumulate as visible noise.
+export function notify(type, title, message, icon, extra = {}) {
+  if (trackingDisabled()) return;
+  addDoc(collection(db, "notifications"), {
+    type,
+    title,
+    message,
+    icon,
+    read: false,
+    visitorId: visitorId(),
+    page: window.location.pathname,
+    createdAt: serverTimestamp(),
+    ...extra,
+  }).catch(() => {});
+}
+
 export function trackVisit() {
   if (trackingDisabled()) return;
   if (sessionStorage.getItem("mk_visited")) return;
   sessionStorage.setItem("mk_visited", "1");
   logEvent("visit");
+  notify("visit", "New visit", `New visit on ${window.location.pathname}`, "\u{1F441}");
 }
 
 let hbStarted = false;
@@ -159,6 +179,7 @@ export function trackVideoPlay(v) {
     category: v.category || "",
     format: v.type || "",
   });
+  notify("video_play", "Video played", `Played "${v.title || "video"}"`, "\u25B6", { title: v.title || "" });
 }
 
 export function bumpLogoViews(logoId) {
@@ -169,20 +190,14 @@ export function bumpLogoViews(logoId) {
 export function trackLogoOpen(l) {
   bumpLogoViews(l.id);
   logEvent("brand_open", { logoId: l.id, name: l.name || "" });
+  notify("brand_open", "Brand opened", `Opened ${l.name || "a brand logo"}`, "\u{1F3E2}");
 }
 
 export function trackCvDownload() {
   if (trackingDisabled()) return;
   setDoc(doc(db, "Cv", CV_DOC), { views: increment(1) }, { merge: true }).catch(() => {});
   logEvent("cv_download");
-  addDoc(collection(db, "notifications"), {
-    type: "cv",
-    title: "CV Download",
-    message: "Someone downloaded your CV.",
-    icon: "\u{1F4C4}",
-    read: false,
-    createdAt: serverTimestamp(),
-  }).catch(() => {});
+  notify("cv", "CV Download", "Someone downloaded your CV.", "\u{1F4C4}");
 }
 
 export function trackWatch(v, seconds, completed, followed) {

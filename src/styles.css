@@ -125,6 +125,8 @@ body {font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse 
 .line-chart { width: 100%; height: 200px; display: block; }
 .lc-day { fill: #8b90a5; font-size: 10px; }
 .badge { background: #f43f5e; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 12px; margin-left: 6px; }
+.bell-wrap { position: relative; display: inline-flex; align-items: center; }
+.badge-dot { position: absolute; top: -7px; right: -11px; background: #f43f5e; color: #fff; border-radius: 999px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px #0a0a12; pointer-events: none; }
 .dash-main { padding: 28px; max-width: 1000px; }
 .dash .panel, .dash .card { background: #0f0f18; border-color: #1f1f2d; }
 .view-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
