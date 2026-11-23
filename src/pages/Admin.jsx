@@ -660,39 +660,68 @@ function Dashboard({ user }) {
   useEffect(() => { reload(); }, []);
 
   const countsRef = useRef(null);
+  const seenIdsRef = useRef(null);
+  const pendingVisitsRef = useRef([]);
   const interactedRef = useRef(false);
   useEffect(() => {
     const onGesture = () => { interactedRef.current = true; unlockAudio(); };
     window.addEventListener("pointerdown", onGesture);
+    // Engagement events always alert. heartbeat/session_end never make sound.
+    // A visit alerts only after a 12s confirmation window, and never when it
+    // arrived in a multi-visitor burst within 10s (scanner fan-out pattern -
+    // the hourly sweep purges those; no point ringing for them).
+    const ALERT_TYPES = { video_play: 1, video_watch: 1, brand_open: 1, cv_download: 1 };
+    const describe = (e) => {
+      if (e.type === "visit") return `New visit on ${e.page || "/"}`;
+      if (e.type === "video_play") return `Video played: ${e.title || e.videoId || ""}`;
+      if (e.type === "video_watch") return `Watched ${Math.round(e.seconds || 0)}s of ${e.title || "a video"}`;
+      if (e.type === "brand_open") return `Brand opened: ${e.name || ""}`;
+      if (e.type === "cv_download") return "CV downloaded";
+      return `New activity: ${e.type || "event"}`;
+    };
+    const alertNow = (msg) => {
+      if (soundRef.current && interactedRef.current) playDing();
+      try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (err) {}
+      showToast(msg);
+    };
     const tick = async () => {
       try {
         const [a, n] = await Promise.all([
           getDocs(collection(db, "analytics")),
           getDocs(collection(db, "notifications")),
         ]);
-        const c = a.size + n.size;
-        if (countsRef.current === null) { countsRef.current = c; return; }
-        if (c > countsRef.current) {
-          countsRef.current = c;
-          // Describe the newest event for the toast.
-          let msg = "New activity";
-          try {
-            const evs = a.docs.map((d) => d.data()).filter((e) => e.createdAt);
-            evs.sort((x, y) => (y.createdAt.seconds || 0) - (x.createdAt.seconds || 0));
-            const e = evs[0];
-            if (e) {
-              if (e.type === "visit") msg = `New visit on ${e.page || "/"}`;
-              else if (e.type === "video_play") msg = `Video played: ${e.title || e.videoId || ""}`;
-              else if (e.type === "video_watch") msg = `Watched ${Math.round(e.seconds || 0)}s of ${e.title || "a video"}`;
-              else if (e.type === "brand_open") msg = `Brand opened: ${e.name || ""}`;
-              else if (e.type === "cv_download") msg = "CV downloaded";
-              else if (e.type === "session_end") msg = `Visitor left after ${Math.round(e.seconds || 0)}s on ${e.page || "/"}`;
-              else msg = `New activity: ${e.type || "event"}`;
-            }
-          } catch (err) {}
-          if (soundRef.current && interactedRef.current) playDing();
-          try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (err) {}
-          showToast(msg);
+        const all = a.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => e.createdAt);
+        if (seenIdsRef.current === null) {
+          seenIdsRef.current = new Set(all.map((e) => e.id));
+          countsRef.current = a.size + n.size;
+          return;
+        }
+        const fresh = all.filter((e) => !seenIdsRef.current.has(e.id));
+        fresh.forEach((e) => seenIdsRef.current.add(e.id));
+        const now = Date.now();
+        const visitsNow = all.filter((e) => e.type === "visit");
+        const isBurst = (e) => {
+          const t = (e.createdAt.seconds || 0) * 1000;
+          const near = new Set(
+            visitsNow
+              .filter((v) => Math.abs((v.createdAt.seconds || 0) * 1000 - t) <= 10000)
+              .map((v) => v.visitorId)
+          );
+          return near.size >= 2;
+        };
+        let alerted = false;
+        for (const e of fresh) {
+          if (ALERT_TYPES[e.type]) { alertNow(describe(e)); alerted = true; }
+          else if (e.type === "visit") pendingVisitsRef.current.push({ e, seenAt: now });
+        }
+        const stillPending = [];
+        for (const p of pendingVisitsRef.current) {
+          if (now - p.seenAt < 12000) { stillPending.push(p); continue; }
+          if (!isBurst(p.e)) { alertNow(describe(p.e)); alerted = true; }
+        }
+        pendingVisitsRef.current = stillPending;
+        if (fresh.length || alerted || a.size + n.size !== countsRef.current) {
+          countsRef.current = a.size + n.size;
           reload();
         }
       } catch (e) {}
