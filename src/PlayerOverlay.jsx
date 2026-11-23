@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ytId, thumb, thumbFallback } from "./youtube";
-import { trackWatch } from "./analytics";
+import { trackWatch, setWatchFlush, beaconEvent } from "./analytics";
 import { WA } from "./App";
 
 let apiPromise = null;
@@ -34,6 +34,26 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
     reportedRef.current = true;
     if (watchRef.current >= 2) trackWatch(video, watchRef.current, completed, followed);
   }
+
+  // Flush watch depth when the tab hides/closes mid-play (session clock calls this).
+  useEffect(() => {
+    setWatchFlush(() => {
+      if (reportedRef.current) return;
+      if (watchRef.current >= 2) {
+        reportedRef.current = true;
+        beaconEvent("video_watch", {
+          videoId: video.id || video.url || "",
+          title: video.title || "",
+          category: video.category || "",
+          seconds: watchRef.current,
+          completed: endedRef.current,
+          followed: false,
+        });
+      }
+    });
+    return () => setWatchFlush(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video]);
 
   // Create the player once.
   useEffect(() => {

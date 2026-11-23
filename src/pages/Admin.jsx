@@ -202,6 +202,7 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
     if (e.type === "brand_open") return `Opened brand "${e.name || "?"}"`;
     if (e.type === "cv_download") return "CV downloaded";
     if (e.type === "heartbeat") return "Visitor still browsing";
+    if (e.type === "session_end") return `Left after ${Math.round(e.seconds || 0)}s on ${e.page || "/"}`;
     return e.type;
   };
 
