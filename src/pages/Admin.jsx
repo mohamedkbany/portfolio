@@ -9,26 +9,50 @@ import { thumb, ytId, thumbFallback } from "../youtube";
 import { setTrackingOptOut } from "../analytics";
 
 
-function playDing() {
+function getAudioCtx() {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
+    if (!Ctx) return null;
     const ctx = playDing.ctx || (playDing.ctx = new Ctx());
-    if (ctx.state === "suspended") ctx.resume();
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    return ctx;
+  } catch (e) { return null; }
+}
+
+// Called on the user's first tap so later timer-triggered sounds are allowed to play.
+function unlockAudio() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.03);
+  } catch (e) {}
+}
+
+function playDing() {
+  try {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
     const t = ctx.currentTime;
-    [880, 1174.66].forEach((f, i) => {
+    // Two alert phrases, three notes each, louder than before.
+    const seq = [880, 1174.66, 1468.33, 0, 880, 1174.66, 1468.33];
+    seq.forEach((f, i) => {
+      if (!f) return;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.type = "sine";
       o.frequency.value = f;
-      const start = t + i * 0.13;
+      const start = t + i * 0.16;
       g.gain.setValueAtTime(0.0001, start);
-      g.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+      g.gain.exponentialRampToValueAtTime(0.55, start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
       o.connect(g);
       g.connect(ctx.destination);
       o.start(start);
-      o.stop(start + 0.45);
+      o.stop(start + 0.55);
     });
   } catch (e) {}
 }
@@ -597,6 +621,13 @@ function Dashboard({ user }) {
   const [soundOn, setSoundOn] = useState(() => {
     try { return localStorage.getItem("mk_admin_sound") !== "0"; } catch (e) { return true; }
   });
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+  function showToast(msg) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 7000);
+  }
   const soundRef = useRef(soundOn);
   useEffect(() => {
     soundRef.current = soundOn;
@@ -631,7 +662,7 @@ function Dashboard({ user }) {
   const countsRef = useRef(null);
   const interactedRef = useRef(false);
   useEffect(() => {
-    const onGesture = () => { interactedRef.current = true; };
+    const onGesture = () => { interactedRef.current = true; unlockAudio(); };
     window.addEventListener("pointerdown", onGesture);
     const tick = async () => {
       try {
@@ -643,13 +674,35 @@ function Dashboard({ user }) {
         if (countsRef.current === null) { countsRef.current = c; return; }
         if (c > countsRef.current) {
           countsRef.current = c;
+          // Describe the newest event for the toast.
+          let msg = "New activity";
+          try {
+            const evs = a.docs.map((d) => d.data()).filter((e) => e.createdAt);
+            evs.sort((x, y) => (y.createdAt.seconds || 0) - (x.createdAt.seconds || 0));
+            const e = evs[0];
+            if (e) {
+              if (e.type === "visit") msg = `New visit on ${e.page || "/"}`;
+              else if (e.type === "video_play") msg = `Video played: ${e.title || e.videoId || ""}`;
+              else if (e.type === "video_watch") msg = `Watched ${Math.round(e.seconds || 0)}s of ${e.title || "a video"}`;
+              else if (e.type === "brand_open") msg = `Brand opened: ${e.name || ""}`;
+              else if (e.type === "cv_download") msg = "CV downloaded";
+              else if (e.type === "session_end") msg = `Visitor left after ${Math.round(e.seconds || 0)}s on ${e.page || "/"}`;
+              else msg = `New activity: ${e.type || "event"}`;
+            }
+          } catch (err) {}
           if (soundRef.current && interactedRef.current) playDing();
+          try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (err) {}
+          showToast(msg);
           reload();
         }
       } catch (e) {}
     };
+    // Catch up instantly when the app comes back to the foreground, so no visit
+    // that landed while the app was backgrounded waits for the next 15s tick.
+    const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVis);
     const iv = setInterval(tick, 15000);
-    return () => { clearInterval(iv); window.removeEventListener("pointerdown", onGesture); };
+    return () => { clearInterval(iv); window.removeEventListener("pointerdown", onGesture); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   async function markAllRead() {
@@ -667,6 +720,11 @@ function Dashboard({ user }) {
 
   return (
     <div className="dash">
+      {toast && (
+        <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "12px 22px", borderRadius: 14, fontWeight: 700, fontSize: 15, boxShadow: "0 8px 30px rgba(0,0,0,.45)", cursor: "pointer", maxWidth: "92vw", textAlign: "center" }} onClick={() => setToast(null)}>
+          {"\u{1F514} "}{toast}
+        </div>
+      )}
       <aside className="side">
         <h2>Kbany Dashboard</h2>
         <p className="muted side-label">MAIN MENU</p>
