@@ -1,6 +1,14 @@
 import { db, CV_DOC } from "./firebase";
 import { doc, setDoc, addDoc, collection, serverTimestamp, increment } from "firebase/firestore";
 
+// Honor ?notrack=1 / ?track=1 at module load, before any component effect runs,
+// so even the very first page view of a notrack link is never recorded.
+try {
+  const q = new URLSearchParams(window.location.search);
+  if (q.get("notrack") === "1") localStorage.setItem("mk_optout", "1");
+  if (q.get("track") === "1") localStorage.removeItem("mk_optout");
+} catch (e) {}
+
 export function trackingDisabled() {
   try {
     return localStorage.getItem("mk_optout") === "1";
