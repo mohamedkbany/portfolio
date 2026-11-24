@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, trackVideoPlay } from "../analytics";
 import { thumb, thumbFallback } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
+import { WA } from "../App";
 
 const CATS = [
   { key: "ai", label: "AI Creative Solutions" },
@@ -18,6 +19,14 @@ export default function Works() {
   const [videos, setVideos] = useState([]);
   const [playing, setPlaying] = useState(null);
   const [kind, setKind] = useState("short");
+  const [search] = useSearchParams();
+  const formats = ["short", "long"].filter(type => videos.some(v => v.category === cat && (v.type || "short") === type));
+  const activeKind = formats.includes(kind) ? kind : formats[0];
+  const categoryVideos = videos.filter(v => v.category === cat);
+  useEffect(() => {
+    const selected = videos.find(v => v.id === search.get("project") && v.category === cat);
+    if (selected) { setKind(selected.type || "short"); setPlaying(selected); }
+  }, [videos, cat, search]);
 
   useEffect(() => {
     trackVisit();
@@ -47,20 +56,21 @@ export default function Works() {
   return (
     <section className="works"><Link to="/" className="back-btn">← Back</Link>
       <h3>{{ai:"AI Works",motion:"Motion Works",editing:"Editing Works",tv:"TV & Broadcast Works"}[cat]}</h3>
-      <div className="cat-tabs"><button className={kind==="short"?"tab active":"tab"} onClick={()=>setKind("short")}>Short Videos</button><button className={kind==="long"?"tab active":"tab"} onClick={()=>setKind("long")}>Long Videos</button></div><div className="category-links">
+      <div className="cat-tabs">{formats.map(type => <button key={type} className={activeKind===type?"tab active":"tab"} onClick={()=>setKind(type)}>{type === "short" ? "Short Videos" : "Long Videos"}</button>)}</div>
+      <a className="audit-gallery-contact" href={WA} target="_blank" rel="noreferrer">Discuss a similar project on WhatsApp ↗</a><div className="category-links">
         {CATS.map((c) => (
           <Link key={c.key} to={`/works/${c.key}`} className={c.key === cat ? "tab active" : "tab"}>{c.label}</Link>
         ))}
       </div>
-      <div className={kind==="short"?"gallery shorts-gallery":"gallery"}>
-        {videos.filter(v=>v.category===cat && (v.type||"short")===kind).map((v) => (
+      <div className={activeKind==="short"?"gallery shorts-gallery":"gallery"}>
+        {videos.filter(v=>v.category===cat && (v.type||"short")===activeKind).map((v) => (
           <button key={v.id} className="card" onClick={() => open(v)}>
             {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             <span className="play">▶</span>
             {v.title && <span className="card-title">{v.title}</span>}
           </button>
         ))}
-        {videos.length === 0 && <p className="hint">No videos in this category yet.</p>}
+        {categoryVideos.length === 0 && <p className="hint">No videos in this category yet.</p>}
       </div>
 
       {playing && (

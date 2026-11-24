@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { db } from "../firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { trackVisit, trackCvDownload, trackLogoOpen } from "../analytics";
-import { thumb, thumbFallback } from "../youtube";
+import { thumb, thumbFallback, ytId } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
 
@@ -28,6 +28,7 @@ const SERVICES = [
 
 export default function Home() {
   const [homeVids, setHomeVids] = useState([]);
+  const [library, setLibrary] = useState([]);
   const [logos, setLogos] = useState([]);
   const [brand, setBrand] = useState(null);
   const [playing, setPlaying] = useState(null);
@@ -36,6 +37,7 @@ export default function Home() {
     trackVisit();
     getDocs(collection(db, "videos")).then((s) => {
       const all = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setLibrary(all);
       setHomeVids(all.filter((v) => v.category === "home").sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
     }).catch(() => {});
     getDocs(collection(db, "Logos")).then((s) => {
@@ -95,7 +97,7 @@ export default function Home() {
         <p className="hint">A glimpse into my creative work. Explore the full portfolio for more projects and collaborations.</p>
         <div className="vid-strip">
           {homeVids.map((v) => (
-            <Link key={v.id} to="/works" className="vid-thumb">
+            <Link key={v.id} to={(() => { const target = library.find(x => x.category !== "home" && (x.url === v.url || (ytId(x.url) && ytId(x.url) === ytId(v.url)))); return target ? `/works/${target.category}?project=${encodeURIComponent(target.id)}` : "/works"; })()} className="vid-thumb">
               {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             </Link>
           ))}
