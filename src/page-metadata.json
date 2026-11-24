@@ -1,0 +1,32 @@
+[
+  {
+    "path": "/",
+    "title": "Mohamed Kbany | Video Editor & AI Creator",
+    "description": "Video editing, AI films and motion graphics by Mohamed Kbany. Explore selected brand projects and get in touch."
+  },
+  {
+    "path": "/works",
+    "title": "Selected Video Work | Mohamed Kbany",
+    "description": "Explore AI video projects, motion graphics, video editing and TV ads by Mohamed Kbany."
+  },
+  {
+    "path": "/works/ai",
+    "title": "AI Video & Creative Ads | Mohamed Kbany",
+    "description": "Explore AI-generated ads and creative films for brands by Mohamed Kbany."
+  },
+  {
+    "path": "/works/motion",
+    "title": "Motion Graphics & Brand Ads | Mohamed Kbany",
+    "description": "Explore motion graphics, product promotions and brand ads by Mohamed Kbany."
+  },
+  {
+    "path": "/works/editing",
+    "title": "Video Editing Portfolio | Mohamed Kbany",
+    "description": "Explore edited brand videos and social content by Mohamed Kbany."
+  },
+  {
+    "path": "/works/tv",
+    "title": "TV & Broadcast Ads | Mohamed Kbany",
+    "description": "Explore TV and broadcast advertising projects by Mohamed Kbany."
+  }
+]

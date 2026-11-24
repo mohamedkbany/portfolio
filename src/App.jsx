@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, NavLink } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Link, NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { auth, ADMIN_EMAIL } from "./firebase";
 import OwnerNotifications from "./OwnerNotifications";
 import Home from "./pages/Home";
+import pageMetadata from "./page-metadata.json";
 import Works from "./pages/Works";
 import Admin from "./pages/Admin";
 import { trackCvDownload, startHeartbeat, startSessionClock, setTrackingOptOut } from "./analytics";
@@ -94,6 +95,19 @@ export function AdminPill() {
   );
 }
 
+function PageMetadata() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const m = pageMetadata.find(p => p.path === pathname);
+    if (!m) return;
+    document.title = m.title;
+    const content = { description: m.description, 'og:title': m.title, 'og:description': m.description, 'og:url': location.origin + pathname, 'twitter:title': m.title, 'twitter:description': m.description };
+    Object.entries(content).forEach(([key,value]) => document.querySelector(`meta[name="${key}"],meta[property="${key}"]`)?.setAttribute('content',value));
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', location.origin + pathname);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
@@ -118,7 +132,7 @@ export default function App() {
   if (!authReady) return null;
   if (window.location.hash.includes("id_token=")) return <Admin />;
   return (
-    <BrowserRouter>
+    <BrowserRouter><PageMetadata />
       {!isAdminHost && window.location.pathname !== "/owner-access" && <OwnerNotifications />}
       <Routes>
         {isAdminHost && <Route path="*" element={<Admin />} />}

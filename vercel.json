@@ -5,6 +5,26 @@
       "destination": "https://mohamedkbany-portfolio.firebaseapp.com/__/auth/:path*"
     },
     {
+      "source": "/works",
+      "destination": "/share-shells/works.html"
+    },
+    {
+      "source": "/works/ai",
+      "destination": "/share-shells/works-ai.html"
+    },
+    {
+      "source": "/works/motion",
+      "destination": "/share-shells/works-motion.html"
+    },
+    {
+      "source": "/works/editing",
+      "destination": "/share-shells/works-editing.html"
+    },
+    {
+      "source": "/works/tv",
+      "destination": "/share-shells/works-tv.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
