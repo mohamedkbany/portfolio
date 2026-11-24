@@ -1,3 +1,4 @@
+import { OwnerBellView } from "../OwnerNotifications";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { db, auth, googleProvider, ADMIN_EMAIL, CV_DOC } from "../firebase";
@@ -775,6 +776,7 @@ function Dashboard({ user }) {
 
   return (
     <div className="dash">
+      <div className="admin-mobile-bell"><OwnerBellView items={visibleNotifs} onRead={rows => Promise.all(rows.filter(n => !n.read).map(n => updateDoc(doc(db, "notifications", n.id), { read: true }))).then(() => reload())} soundOn={soundOn} onSound={() => { setSoundOn(!soundOn); if (!soundOn) setTimeout(playDing, 50); }} /></div>
       {toast && (
         <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "12px 22px", borderRadius: 14, fontWeight: 700, fontSize: 15, boxShadow: "0 8px 30px rgba(0,0,0,.45)", cursor: "pointer", maxWidth: "92vw", textAlign: "center" }} onClick={() => setToast(null)}>
           {"\u{1F514} "}{toast}

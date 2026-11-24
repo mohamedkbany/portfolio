@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, NavLink } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { auth, ADMIN_EMAIL } from "./firebase";
+import OwnerNotifications from "./OwnerNotifications";
 import Home from "./pages/Home";
 import Works from "./pages/Works";
 import Admin from "./pages/Admin";
@@ -93,17 +95,34 @@ export function AdminPill() {
 }
 
 export default function App() {
+  const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
+    let active = true;
+    auth.authStateReady().then(() => {
+      if (!active) return;
+      const u = auth.currentUser;
+      if (u?.emailVerified && u.email?.toLowerCase() === ADMIN_EMAIL) setTrackingOptOut(true);
+      setAuthReady(true);
+    }).catch(() => { /* Fail closed: do not start tracking without restored auth. */ });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!authReady) return;
+    if (window.location.hash.includes("id_token=")) { setTrackingOptOut(true); return; }
     const q = new URLSearchParams(window.location.search);
     if (q.get("notrack") === "1") setTrackingOptOut(true);
-    if (q.get("track") === "1") setTrackingOptOut(false);
+    if (q.get("track") === "1" && !(auth.currentUser?.emailVerified && auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL)) setTrackingOptOut(false);
     startHeartbeat();
     startSessionClock();
-  }, []);
+  }, [authReady]);
+  if (!authReady) return null;
+  if (window.location.hash.includes("id_token=")) return <Admin />;
   return (
     <BrowserRouter>
+      {!isAdminHost && window.location.pathname !== "/owner-access" && <OwnerNotifications />}
       <Routes>
         {isAdminHost && <Route path="*" element={<Admin />} />}
+        {!isAdminHost && <Route path="/owner-access" element={<Admin />} />}
         {!isAdminHost && <Route path="/admin-218405" element={<Navigate to="/" replace />} />}
         <Route
           path="*"

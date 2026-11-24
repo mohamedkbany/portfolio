@@ -11,6 +11,7 @@ try {
 
 export function trackingDisabled() {
   try {
+    if (window.location.pathname === "/owner-access" || window.location.hostname === "mk-admin-7f3a9c.vercel.app") return true;
     return localStorage.getItem("mk_optout") === "1";
   } catch (e) {
     return false;
