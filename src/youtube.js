@@ -4,6 +4,7 @@ export function ytId(url) {
   return m ? m[1] : null;
 }
 export function thumb(url) {
+  if (url === "https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4") return "https://res.cloudinary.com/m6ukdjvl/image/upload/v1795649101/2-virone-ad23.jpg";
   const id = ytId(url);
   if (id) return `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`;
   if (/\.mp4(\?|$)/i.test(url || "") && url.includes("res.cloudinary.com")) {
