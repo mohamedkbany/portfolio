@@ -61,9 +61,9 @@ export default function Home() {
   useEffect(() => {
     trackVisit();
     getDocs(collection(db, "videos")).then((s) => {
-      const all = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const all = s.docs.map((d) => ({ id: d.id, ...d.data() })).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
       setLibrary(all);
-      setHomeVids(all.filter((v) => v.category === "home").sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+      const home = all.filter(v => v.category === "home").sort((a,b)=>(a.order??0)-(b.order??0)); const ad23=all.find(v=>v.id==="OHkdV3yEbsNBHUsfCDXW"); if(ad23) home.splice(4,0,{...ad23,id:"home-ad23-selfhost",category:"home"}); setHomeVids(home);
     }).catch(() => {});
     getDocs(collection(db, "Logos")).then((s) => {
       setLogos(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
