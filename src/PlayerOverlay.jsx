@@ -1,6 +1,7 @@
+import { playbackStep } from "./traffic-policy";
 import { useEffect, useRef, useState } from "react";
 import { ytId, thumb, thumbFallback } from "./youtube";
-import { trackWatch, setWatchFlush, beaconEvent } from "./analytics";
+import { trackWatch, setWatchFlush, beaconEvent, trackMeasuredView, trackVideoOpen } from "./analytics";
 import { WA } from "./App";
 
 let apiPromise = null;
@@ -28,6 +29,22 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
   const watchRef = useRef(0);
   const reportedRef = useRef(false);
   const endedRef = useRef(false);
+  const playbackRef = useRef({ seconds: 0, position: 0, at: performance.now(), playing: false });
+  const countedRef = useRef(false);
+  const playbackId = useRef(crypto.randomUUID());
+  function sample(position, playing) {
+    playbackRef.current = playbackStep(playbackRef.current, position, performance.now(), playing, document.visibilityState === "visible");
+    watchRef.current = playbackRef.current.seconds;
+    if (!countedRef.current && watchRef.current >= 5) {
+      countedRef.current = true;
+      trackMeasuredView(video, watchRef.current, playbackId.current);
+    }
+  }
+  useEffect(() => {
+    const hidden = () => { if (document.visibilityState !== "visible") playbackRef.current.playing = false; };
+    document.addEventListener("visibilitychange", hidden);
+    return () => document.removeEventListener("visibilitychange", hidden);
+  }, []);
 
   function reportWatch(completed, followed) {
     if (reportedRef.current) return;
@@ -87,7 +104,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
     const watchTick = setInterval(() => {
       try {
         const p = playerRef.current;
-        if (p && p.getPlayerState && p.getPlayerState() === 1) watchRef.current = p.getCurrentTime();
+        if (p && p.getPlayerState) sample(p.getCurrentTime(), p.getPlayerState() === 1);
       } catch (e) {}
     }, 1000);
     const el = wrapRef.current;
@@ -138,9 +155,11 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
               autoPlay
               controls
               playsInline
-              onTimeUpdate={(e) => { watchRef.current = e.currentTarget.currentTime; }}
+              onTimeUpdate={(e) => sample(e.currentTarget.currentTime, !e.currentTarget.paused && !e.currentTarget.seeking)}
               onEnded={() => { setEnded(true); endedRef.current = true; }}
               onPlay={() => setEnded(false)}
+              onPause={(e) => sample(e.currentTarget.currentTime, false)}
+              onSeeking={() => { playbackRef.current.playing = false; }}
             />
           ) : (
             <div ref={mountRef} className="yt-mount" />
@@ -152,7 +171,7 @@ export default function PlayerOverlay({ video, suggestions = [], onClose, onPick
                   <p className="ended-title">Watch next</p>
                   <div className="ended-grid">
                     {suggestions.slice(0, 3).map((s, i) => (
-                      <button key={s.url + i} className="ended-card" onClick={() => { reportWatch(true, true); onPick(s); }}>
+                      <button key={s.url + i} className="ended-card" onClick={() => { reportWatch(true, true); trackVideoOpen(s); onPick(s); }}>
                         <img src={thumb(s.url)} onError={thumbFallback} alt={s.title || "video"} />
                         <span className="ended-play">▶</span>
                         {s.title && <span className="ended-card-title">{s.title}</span>}

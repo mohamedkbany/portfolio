@@ -1,4 +1,5 @@
-import { db, CV_DOC, FB_PROJECT_ID, FB_API_KEY } from "./firebase";
+import { TRACKING_VERSION, VIEW_SECONDS, burstReason } from "./traffic-policy";
+import { db, auth, ADMIN_EMAIL, CV_DOC, FB_PROJECT_ID, FB_API_KEY } from "./firebase";
 import { doc, setDoc, addDoc, updateDoc, collection, serverTimestamp, increment } from "firebase/firestore";
 
 // Honor ?notrack=1 / ?track=1 at module load, before any component effect runs,
@@ -11,6 +12,7 @@ try {
 
 export function trackingDisabled() {
   try {
+    if (auth.currentUser?.emailVerified && auth.currentUser.email?.toLowerCase() === ADMIN_EMAIL) return true;
     if (window.location.pathname === "/owner-access" || window.location.hostname === "mk-admin-7f3a9c.vercel.app") return true;
     return localStorage.getItem("mk_optout") === "1";
   } catch (e) {
@@ -32,6 +34,38 @@ export function visitorId() {
     localStorage.setItem("mk_visitor_id", id);
   }
   return id;
+}
+
+// Session state stays in this tab and expires after 30 minutes of inactivity.
+function trafficState() {
+  let state;
+  try { state = JSON.parse(sessionStorage.getItem("mk_traffic_v2") || "null"); } catch (e) {}
+  if (!state || Date.now() - state.lastAt > 1800000) state = { id: crypto.randomUUID(), lastAt: Date.now(), opens: [], quarantined: false };
+  return state;
+}
+function saveTraffic(state) {
+  state.lastAt = Date.now();
+  try { sessionStorage.setItem("mk_traffic_v2", JSON.stringify(state)); } catch (e) {}
+}
+function trafficFields() {
+  const state = trafficState(); saveTraffic(state);
+  return { sessionId: state.id, trackingVersion: TRACKING_VERSION, trafficStatus: state.quarantined ? "quarantined" : "normal" };
+}
+export function trackVideoOpen(v) {
+  if (trackingDisabled()) return;
+  const state = trafficState(), now = Date.now();
+  state.opens = [...state.opens.filter(t => now - t <= 60000), now];
+  const reason = burstReason(state.opens, now);
+  const newlyQuarantined = !!reason && !state.quarantined;
+  if (reason) state.quarantined = true;
+  saveTraffic(state);
+  if (newlyQuarantined) logEvent("session_quarantine", { reason, reviewStatus: "pending", openingsIn60s: state.opens.length });
+  logEvent("video_open", { videoId: v.id || v.url || "", title: v.title || "", category: v.category || "", format: v.type || "" });
+}
+export function trackMeasuredView(v, seconds, playbackId) {
+  if (trackingDisabled() || seconds < VIEW_SECONDS || !v.id) return;
+  logEvent("video_view", { videoId: v.id, title: v.title || "", category: v.category || "", measuredSeconds: Math.floor(seconds), playbackId });
+  if (!trafficState().quarantined) notify("video_view", "Video viewed", `Measured playback: ${v.title || "video"}`, "▶", { videoId: v.id, title: v.title || "" });
 }
 
 // Country-level geo, resolved client-side right after a visit is logged and
@@ -61,6 +95,7 @@ export function logEvent(type, extra = {}) {
     visitorId: visitorId(),
     page: window.location.pathname,
     createdAt: serverTimestamp(),
+    ...trafficFields(),
     ...extra,
   });
   if (type === "visit") p.then((ref) => attachGeo(ref)).catch(() => {});
@@ -82,6 +117,7 @@ export function notify(type, title, message, icon, extra = {}) {
     visitorId: visitorId(),
     page: window.location.pathname,
     createdAt: serverTimestamp(),
+    ...trafficFields(),
     ...extra,
   }).catch(() => {});
 }
@@ -118,6 +154,7 @@ function toField(v) {
 export function beaconEvent(type, extra = {}) {
   if (trackingDisabled()) return;
   const fields = {
+    ...Object.fromEntries(Object.entries(trafficFields()).map(([k,v]) => [k, toField(v)])),
     type: toField(type),
     visitorId: toField(visitorId()),
     page: toField(window.location.pathname),
@@ -167,21 +204,8 @@ export function startSessionClock() {
   });
 }
 
-export function bumpVideoViews(videoId) {
-  if (trackingDisabled()) return;
-  setDoc(doc(db, "videos", videoId), { views: increment(1) }, { merge: true }).catch(() => {});
-}
-
-export function trackVideoPlay(v) {
-  bumpVideoViews(v.id);
-  logEvent("video_play", {
-    videoId: v.id,
-    title: v.title || "",
-    category: v.category || "",
-    format: v.type || "",
-  });
-  notify("video_play", "Video played", `Played "${v.title || "video"}"`, "\u25B6", { title: v.title || "" });
-}
+// Existing callers now record openings, never counter increments.
+export function trackVideoPlay(v) { trackVideoOpen(v); }
 
 export function bumpLogoViews(logoId) {
   if (trackingDisabled()) return;

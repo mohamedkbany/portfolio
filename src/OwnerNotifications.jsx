@@ -1,3 +1,4 @@
+import { eventSession, quarantinedSessions } from "./traffic-policy";
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
@@ -49,9 +50,10 @@ export default function OwnerNotifications() {
   },[owner]);
   useEffect(() => {
     if(!owner) return;
-    let raw = [], timer;
+    let raw = [], events = [], timer;
     const publish = () => {
-      const clean = visibleNotifications(raw, Date.now());
+      const blocked = quarantinedSessions(events);
+      const clean = visibleNotifications(raw.filter(n => !blocked.has(eventSession(n))), Date.now());
       if (seen.current) {
         const fresh = clean.filter(n => !seen.current.has(n.id) && Date.now()-(n.createdAt?.toMillis?.()||0)<60000);
         if (fresh.length) { setBanner(fresh[0].message||fresh[0].title); if(sound.current) ding(); navigator.vibrate?.([200,100,200]); clearTimeout(timer); timer=setTimeout(()=>setBanner(""),7000); }
@@ -63,8 +65,9 @@ export default function OwnerNotifications() {
       raw=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
       publish();setError(false);
     },()=>setError(true));
+    const stopEvents = onSnapshot(collection(db,"analytics"), snap => { events=snap.docs.map(d=>({id:d.id,...d.data()})); publish(); },()=>setError(true));
     const cadence=setInterval(publish,1000);
-    return ()=>{unsubscribe();clearInterval(cadence);clearTimeout(timer);};
+    return ()=>{unsubscribe();stopEvents();clearInterval(cadence);clearTimeout(timer);};
   },[owner]);
   if(!owner) return null;
   return <OwnerBellView items={items} error={error} banner={banner} soundOn={soundOn} onSound={()=>{const next=!soundOn;setSound(next);localStorage.setItem("mk_admin_sound",next?"1":"0");if(next)ding();}} onRead={rows=>Promise.all(rows.filter(n=>!n.read).map(n=>updateDoc(doc(db,"notifications",n.id),{read:true}))).catch(()=>setError(true))}/>;
