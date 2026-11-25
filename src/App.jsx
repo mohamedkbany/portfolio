@@ -143,7 +143,7 @@ export default function App() {
           element={
             <>
               <Routes>
-                <Route path="/" element={<><Nav /><main><Home /></main><Footer /><WhatsAppFloat /><AdminPill /></>} />
+                <Route path="/" element={<><main><Home /></main><WhatsAppFloat /><AdminPill /></>} />
                 <Route path="/works" element={<Navigate to="/works/ai" replace />} />
                 <Route path="/works/:cat" element={<><Works /><AdminPill /></>} />
               </Routes>
