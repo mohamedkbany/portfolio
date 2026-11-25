@@ -1,3 +1,4 @@
+import { acceptedEvents, countedVideos, eventSession, quarantinedSessions } from "../traffic-policy";
 import { OwnerBellView } from "../OwnerNotifications";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -225,7 +226,8 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
   // hidden from every number and from the feed, even before the 30-min sweep
   // deletes them from Firestore. A visitor with ANY engagement is never a bot.
   const botIds = computeBotIds(events);
-  const shown = events.filter((e) => !botIds.has(e.visitorId));
+  const quarantined = quarantinedSessions(events);
+  const shown = acceptedEvents(events).filter((e) => !botIds.has(e.visitorId));
   const visits = shown.filter((e) => e.type === "visit");
   const todayKey = dayKey(now);
   const yKey = dayKey(now - DAY);
@@ -243,6 +245,8 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
   const icon = { visit: "👁", video_play: "▶", brand_open: "🏢", cv_download: "📄", heartbeat: "💓" };
   const text = (e) => {
     if (e.type === "visit") return `Visit on ${e.page || "/"}${e.country ? ` · ${e.country}` : ""}`;
+    if (e.type === "video_view") return `Measured view: ${e.title || e.videoId}`;
+    if (e.type === "video_open") return `Opened "${e.title || e.videoId}" (not a counted view)`;
     if (e.type === "video_play") return `Played "${e.title || e.videoId}" (${e.category || "?"} ${e.format || ""})`;
     if (e.type === "brand_open") return `Opened brand "${e.name || "?"}"`;
     if (e.type === "cv_download") return "CV downloaded";
@@ -279,6 +283,17 @@ function AnalyticsView({ events, videos, logos, cvViews, refreshedAt }) {
         <LineChart data={last14(shown, "visit")} label="Last 14 days" />
       </div>
 
+      <div className="panel">
+        <h4>Traffic review queue ({quarantined.size})</h4>
+        <p className="muted">Flagged sessions are retained, excluded from traffic and measured-view totals, and never automatically deleted. Threshold: 6 openings in 10 seconds or 15 in 60 seconds. New views require 5 seconds of active visible playback. Existing counters are unchanged.</p>
+        {[...quarantined].map(id => {
+          const rows = events.filter(e => eventSession(e) === id);
+          const flag = rows.find(e => e.type === "session_quarantine");
+          const opens = rows.filter(e => e.type === "video_open");
+          return <details key={id}><summary>{flag?.visitorId || rows[0]?.visitorId} · {opens.length} openings · {flag?.reason || "Fast opening burst"} · pending review</summary><p className="muted">Session {id}</p>{opens.map(e => <p key={e.id}>{new Date(tsOf(e)).toLocaleString()} · {e.title || e.videoId}</p>)}</details>;
+        })}
+        {!quarantined.size && <p className="muted">No flagged sessions.</p>}
+      </div>
       <div className="panel">
         <h4>Recent activity</h4>
         <div className="feed">
@@ -350,8 +365,8 @@ function VideoAnalytics({ videos, events, refreshedAt }) {
       </div>
 
       <div className="panel">
-        <h4>Plays per day</h4>
-        <BarChart data={last14(events, "video_play")} label="Last 14 days" />
+        <h4>Measured views per day (new tracking)</h4>
+        <BarChart data={last14(events, "video_view")} label="Last 14 days" />
       </div>
 
       <div className="panel">
@@ -668,7 +683,8 @@ function Dashboard({ user }) {
       getDocs(collection(db, "notifications")),
       getDocs(collection(db, "Cv")),
     ]);
-    setVideos(v.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const eventRows = a.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setVideos(countedVideos(v.docs.map((d) => ({ id: d.id, ...d.data() })), eventRows));
     setLogos(l.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (x.order ?? 0) - (y.order ?? 0)));
     setEvents(a.docs.map((d) => ({ id: d.id, ...d.data() })));
     setNotifs(n.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => tsOf(y) - tsOf(x)));
@@ -691,10 +707,12 @@ function Dashboard({ user }) {
     // A visit alerts only after a 12s confirmation window, and never when it
     // arrived in a multi-visitor burst within 10s (scanner fan-out pattern -
     // the hourly sweep purges those; no point ringing for them).
-    const ALERT_TYPES = { video_play: 1, video_watch: 1, brand_open: 1, cv_download: 1 };
+    const ALERT_TYPES = { video_view: 1, video_play: 1, video_watch: 1, brand_open: 1, cv_download: 1 };
     const describe = (e) => {
       if (e.type === "visit") return `New visit on ${e.page || "/"}${e.country ? ` · ${e.country}` : ""}`;
-      if (e.type === "video_play") return `Video played: ${e.title || e.videoId || ""}`;
+      if (e.type === "video_view") return `Measured view: ${e.title || e.videoId}`;
+    if (e.type === "video_open") return `Opened "${e.title || e.videoId}" (not a counted view)`;
+    if (e.type === "video_play") return `Video played: ${e.title || e.videoId || ""}`;
       if (e.type === "video_watch") return `Watched ${Math.round(e.seconds || 0)}s of ${e.title || "a video"}`;
       if (e.type === "brand_open") return `Brand opened: ${e.name || ""}`;
       if (e.type === "cv_download") return "CV downloaded";
@@ -711,7 +729,7 @@ function Dashboard({ user }) {
           getDocs(collection(db, "analytics")),
           getDocs(collection(db, "notifications")),
         ]);
-        const all = a.docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => e.createdAt);
+        const all = acceptedEvents(a.docs.map((d) => ({ id: d.id, ...d.data() }))).filter((e) => e.createdAt);
         if (seenIdsRef.current === null) {
           seenIdsRef.current = new Set(all.map((e) => e.id));
           countsRef.current = a.size + n.size;
@@ -765,7 +783,8 @@ function Dashboard({ user }) {
 
   // Hide burst-bot notification entries exactly like Analytics hides their events.
   const botIds = computeBotIds(events);
-  const visibleNotifs = notifs.filter((n) => !n.visitorId || !botIds.has(n.visitorId));
+  const quarantined = quarantinedSessions(events);
+  const visibleNotifs = notifs.filter((n) => !quarantined.has(eventSession(n)) && (!n.visitorId || !botIds.has(n.visitorId)));
   const unread = visibleNotifs.filter((n) => !n.read).length;
   const MENU = [
     ["analytics", "Analytics"],
@@ -817,7 +836,7 @@ function Dashboard({ user }) {
         {loading ? <p>Loading…</p> : (
           <>
             {view === "analytics" && <AnalyticsView events={events} videos={videos} logos={logos} cvViews={cvViews} refreshedAt={refreshedAt} />}
-            {view === "vanalytics" && <VideoAnalytics videos={videos} events={events} refreshedAt={refreshedAt} />}
+            {view === "vanalytics" && <VideoAnalytics videos={videos} events={acceptedEvents(events)} refreshedAt={refreshedAt} />}
             {view === "logos" && <LogosManager logos={logos} reload={reload} setMsg={setMsg} msg={msg} />}
             {view === "videos" && <VideoManager videos={videos} reload={reload} setMsg={setMsg} msg={msg} />}
           </>
@@ -877,4 +896,4 @@ export default function Admin() {
   }
 
   return <Dashboard user={user} />;
-}
+            }
