@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
-import { trackVisit, trackCvDownload, trackLogoOpen } from "../analytics";
+import { db, auth, ADMIN_EMAIL } from "../firebase";
+import { collection, getDocs, writeBatch, doc } from "firebase/firestore";
+import { trackVisit, trackCvDownload, trackLogoOpen, trackVideoPlay } from "../analytics";
 import { thumb, thumbFallback, ytId } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
@@ -26,9 +26,32 @@ const SERVICES = [
   { n: "04", title: "TV & Broadcast", desc: "Broadcast-quality production for TV, streaming and live events.", img: "/tv.webp", cat: "tv" },
 ];
 
+
+const SERVICE_AR={ai:['حلول إبداعية بالذكاء الاصطناعي','إنتاج بالذكاء الاصطناعي يفتح أفكارًا إبداعية جديدة.'],motion:['موشن جرافيك','موشن جرافيك سينمائي يوضح رسالتك ويقوّي هوية علامتك.'],editing:['مونتاج الفيديو','مونتاج ليوتيوب والإعلانات ومحتوى العلامات التجارية.'],tv:['التلفزيون والبث','إنتاج للتلفزيون والبث والفعاليات المباشرة.']};
+const SECTOR_IDS={"pharmacy": ["0nDwoBuUJFk39OXhTmJX", "qXaVa7gkZzo9TsuZJS6N", "5ncqqZTJyt9uOXqaYpVx", "hA40dInbLa9acRGEqIYQ", "g5JlmTtfw8Y1m9mskI8S", "WhN9PLWR70EoaMMdn3S7", "8AGPwl5oZ0eGFTbFm3TI", "dAypuEvRscboPOozfqPJ", "iYtW71Ng8bgCHYkuX6s1", "uVEyOAdYWd02p8sTVZvW", "0sq1939bY40CV3QNoKZy", "84RM6EfTmFgMbEupXA7W", "3OLeMMLDh9GhCJpkbrgO", "NgDAz6a6KjAuSqXuHOi1", "Yq0WKRJppiZN2w0U0ANc", "1K3zwfSv9lIHivac3nbJ", "Qr2iUxembGfxkEwbI3XY", "bqk6ivLdxUDUCjBVw91b", "O68m4ZKDJy5aA959Aovs", "fmBrT0R355zj4SKKW44s", "hbwFmvApkedhcbnIr65W", "LHH1q6pC4cHHVpefTM1p", "MVmvOCXvkWhbVXbrAYni", "KqB3EBW13z80HxRs1evG", "dZGV9U8JwbpBAn8QQNFS", "B08qy7xktOqzsAEcnuID", "WDwSG6wR3HJtffapfxz1", "95SUinFLEnZzMh9YAW97", "frNpCX601Zds9mwEXBus", "CQiRltF4mU4FXJ7CRGG0", "TzsgWfpZZdMX7GcuevZa", "N8DxD2PUd23t6aUYeQhF", "pBx9i4ZWJNClm7epIL4Z", "BrIJ3YGI2OXn0mSvL0cB", "My7eFIOcz9D1Ce6areKC"], "perfume": ["fVVjmUhTAcMwOF7EdBHh", "78iQa3ONcnlxouYDYpst"], "beauty": ["uN73Rz0ZwEcpLRHaBi8n", "dAypuEvRscboPOozfqPJ", "KQHO3aE6JIuLrMwwFjSr", "naMpJaZiminEdFQJmdnp", "A8A7UsglbQyfZHZn6ado", "WhN9PLWR70EoaMMdn3S7", "KqB3EBW13z80HxRs1evG", "uEPkVniZZbbw7j0HfvWo", "Qr2iUxembGfxkEwbI3XY", "My7eFIOcz9D1Ce6areKC", "hbwFmvApkedhcbnIr65W"], "sports": ["VYf7l0DfS3rU3SWGRTc7", "XyFEnaH0VwlsKduk2uCD", "GNZlH71Rn2K2usg0DBVC", "qrFp2h3DivDq3O82ig3k", "QWkrGvBblOJWOyzNvaAp", "bkNl8phg5FERc2rDOgFV"], "electronics": ["AIdpFFFwvmIZP4b2IDwe", "cI2Uo5skBXyfh1hEmg3I", "ngAV1rUR5feX4T2G1O9d", "5KjyMlLimys0b7fMwaUJ", "9Kkhc39qcjLTfBq6AUDR", "nlgl3K7icutCYhiytqhU", "SvRLzcSaC0ybU6R3v4Hb", "Gohp8IObE7dy2V3Pipei", "vGgTn70rcNSmuUcgyvnI", "VuJRWJM95QjP6uxtr4oh"], "food": ["RLKlQ8PYLSCF4e2mnqjV", "0DZtxYA4YAekjVQEomB6", "Ez9rYO015B3FxH2dwTIY", "WmIlW69awGEEDjLPd0nH", "VTHWTkmuPbUVfJDkxBGm", "XFYCSrci6QDqtqAXMuZ6"], "ugc": ["iYtW71Ng8bgCHYkuX6s1"]};
+function filterSector(all,key){return (SECTOR_IDS[key]||[]).map((id,index)=>{const v=all.find(v=>v.id===id);return v?{...v,_sectorIndex:index}:null;}).filter(Boolean).sort((a,b)=>(a.sectorOrder?.[key]??a._sectorIndex)-(b.sectorOrder?.[key]??b._sectorIndex)||a._sectorIndex-b._sectorIndex);}
+
+const HOME_CSS=`.home-general{max-width:1132px;margin:auto;color:#f7f0fa;padding:0 0 10px}.home-top{display:flex;justify-content:space-between;align-items:center;padding:30px 0 22px;border-bottom:1px solid #49324f}.home-name{font-size:16px;letter-spacing:3px}.lang-switch{font:inherit;font-size:12px;border:1px solid #684277;border-radius:24px;color:inherit;background:transparent;padding:11px 19px;cursor:pointer}.home-intro{display:grid;grid-template-columns:1.2fr 1fr;gap:70px;align-items:center;padding:48px 0}.intro-copy h1{font-size:43px;line-height:1.25;margin:0 0 23px}.intro-copy h1 span{color:#d866df}.intro-copy p{font-size:15px;line-height:1.9;color:#c0adc8}.intro-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}.intro-actions .btn{font-size:15px;border-radius:10px;padding:14px 20px}.intro-actions .primary{background:#a800e2}.industry-panel{border:1px solid #654072;border-radius:22px;background:linear-gradient(130deg,#2a1034,#170b22);padding:24px}.industry-panel small{color:#cfa5df;font-size:13px}.industry-panel h2{font-size:25px;margin:8px 0 18px}.industry-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.industry-grid button{font:inherit;font-size:14px;border:1px solid #593465;background:#27122f;border-radius:13px;color:white;min-height:51px;padding:8px;cursor:pointer}.industry-grid button:hover{border-color:#e37ef1}.home-divider{border-top:1px solid #573060;text-align:center;padding:26px 0 20px;font-size:14px;color:#d8b8e6;scroll-margin-top:20px}.home-general .brands{padding:0 0 12px}.home-general .brands .hint{font-weight:normal;color:#c0adc8}.home-general .logo-row{justify-content:flex-start}.home-general .brand-card img{width:83px;height:83px}.home-general .stats{margin:28px auto}.home-general .stats strong{font-size:29px}.home-general .stats span{font-size:11px}.home-general .services{padding:26px 0}.home-general .service-card img{height:auto;aspect-ratio:2.3}.home-general .service-card{border-radius:18px}.home-general .service-body{padding:18px}.home-general .service-body h4{font-size:21px}.home-general .service-body p{font-size:13px}.home-general .service-grid{direction:ltr}.home-general[dir=rtl] .service-body{direction:rtl;text-align:right}.home-general .selection{padding:28px 0}.home-general .vid-strip{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.home-footer{border-top:1px solid #573060;padding:28px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;color:#c0adc8;font-size:13px;line-height:2}.home-footer a{display:block}.home-footer .btn{display:inline-block;font-size:13px;margin-top:12px}.home-copy{grid-column:1/-1;text-align:center;font-size:11px}.sector-owner{padding:12px;border:1px solid #825891;border-radius:10px;margin:10px 0 20px}.order-buttons{display:flex;align-items:center;justify-content:center;gap:8px}.order-buttons button{width:auto;padding:5px 12px;font-size:20px}.sector-dialog .brand-videos>div>button{width:100%}.sector-dialog{width:95%;max-width:1000px}.sector-dialog .brand-videos p{font-size:12px;color:white;padding:10px 0}.sector-dialog .brand-videos button{border:1px solid #573060;border-radius:10px;overflow:hidden}.sector-dialog .brand-videos img{width:100%;aspect-ratio:9/16;object-fit:cover}button:focus-visible,a:focus-visible{outline:3px solid #efb7ff;outline-offset:4px}@media(max-width:1180px){.home-general{margin:0 5%}.home-intro{gap:40px}}@media(max-width:600px){.home-general{margin:0 18px}.home-top{padding:19px 0 22px}.home-name{font-size:11px;letter-spacing:1px}.lang-switch{padding:7px 12px;font-size:11px}.home-intro{display:flex;flex-direction:column;align-items:stretch;padding:24px 0 34px;gap:25px}.intro-copy h1{font-size:32px;margin:0 0 22px}.intro-copy p{font-size:13px}.intro-actions{margin-top:24px}.intro-actions .btn{font-size:12px;padding:13px 18px}.industry-panel{padding:18px;border-radius:20px}.industry-panel h2{font-size:22px}.industry-panel small{font-size:12px}.industry-grid{gap:8px}.industry-grid button{min-height:41px;font-size:11px;border-radius:12px}.home-divider{font-size:12px}.home-general .brand-card img{width:52px;height:52px}.home-general .stats{padding:0;margin:20px auto}.home-general .stats strong{font-size:24px}.home-general .stats span{font-size:10px}.home-general .services h3,.home-general .selection h3{font-size:22px}.home-general .service-body h4{font-size:18px}.home-general .vid-strip{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.home-general .hint{font-size:11px}.home-footer{font-size:11px;gap:20px}.home-copy{font-size:9px}.sector-dialog .brand-videos{grid-template-columns:1fr 1fr}}`;
+
 export default function Home() {
+  const [lang, setLanguage] = useState(() => {try {const q=new URLSearchParams(location.search).get('lang');const saved=localStorage.getItem('mk_language');return ['ar','en'].includes(q)?q:['ar','en'].includes(saved)?saved:(navigator.languages||[navigator.language])[0].toLowerCase().startsWith('ar')?'ar':'en';}catch{return 'en';}});
+  const ar=lang==='ar';
+  const [sector, setSector]=useState(null);
+  const [sectorVideo,setSectorVideo]=useState(null);
+  const [draftOrder,setDraftOrder]=useState(null);
+  const [orderMsg,setOrderMsg]=useState('');
+  const [savingOrder,setSavingOrder]=useState(false);
+  const isOwner=auth.currentUser?.emailVerified && auth.currentUser.email?.toLowerCase()===ADMIN_EMAIL;
+  function shiftSector(index,delta){const arr=[...sectorItems];[arr[index],arr[index+delta]]=[arr[index+delta],arr[index]];setDraftOrder(arr);setOrderMsg('');}
+  async function saveSectorOrder(){if(!isOwner||savingOrder)return;setSavingOrder(true);setOrderMsg('');try{const batch=writeBatch(db);sectorItems.forEach((v,i)=>batch.update(doc(db,'videos',v.id),{['sectorOrder.'+sector]:i}));await batch.commit();const updated=library.map(v=>{const i=sectorItems.findIndex(x=>x.id===v.id);return i<0?v:{...v,sectorOrder:{...(v.sectorOrder||{}),[sector]:i}};});setLibrary(updated);setDraftOrder(null);setOrderMsg(ar?'اتحفظ ترتيب المجال فقط. الأقسام الأصلية لم تتغير.':'Sector order saved. Original sections are unchanged.');}catch{setOrderMsg(ar?'الترتيب لم يتحفظ. حاول مرة أخرى.':'Order could not be saved. Please retry.');}finally{setSavingOrder(false);}}
+
+  const t=(en,arabic)=>ar?arabic:en;
+  function switchLanguage(){const l=ar?'en':'ar';setLanguage(l);try{localStorage.setItem('mk_language',l);const u=new URL(location.href);u.searchParams.set('lang',l);history.replaceState(null,'',u);}catch{}}
+  useEffect(()=>{document.documentElement.lang=lang;return()=>{document.documentElement.lang='en';};},[lang]);
+  const selectors=[['perfume','Perfume','العطور'],['pharmacy','Pharmacy','الصيدليات'],['beauty','Beauty','التجميل'],['sports','Sports','الرياضة'],['electronics','Electronics','الإلكترونيات'],['food','Food & drinks','الأكل والمشروبات'],['ugc','UGC','UGC']];
   const [homeVids, setHomeVids] = useState([]);
   const [library, setLibrary] = useState([]);
+  const sectorItems=draftOrder||filterSector(library,sector);
   const [logos, setLogos] = useState([]);
   const [brand, setBrand] = useState(null);
   const [playing, setPlaying] = useState(null);
@@ -47,20 +70,15 @@ export default function Home() {
 
   return (
     <>
-      <section className="hero"><div className="hero-copy">
-        <h1>Professional Video Editing</h1>
-        <h2>AI Creator &amp; Motion Magic Specialist</h2>
-        <p className="tagline">Cinematic Edits • AI-Generated Videos • Creative Motion Design • Visual Storytelling That Captures Attention</p>
-        <div className="hero-btns">
-          <Link className="btn primary" to="/works">View My Works</Link>
-          <a className="btn" href="/mohamed_kbany.pdf" onClick={downloadCv}>Download CV</a>
-        </div>
-
-        </div><img className="hero-logo" src="/logo.webp" alt="Mohamed Kbany logo" />
-      </section>
-
+      <style>{HOME_CSS}</style>
+      <div className="home-general" dir={ar?'rtl':'ltr'}>
+      <header className="home-top"><Link to="/" className="home-name">MOHAMED KBANY</Link><button className="lang-switch" onClick={switchLanguage}>{ar?'English':'العربية'}</button></header>
+      <section className="home-intro">
+        <div className="intro-copy"><h1>{t('Work that fits','شوف شغل')}<br/><span>{t('your industry.','يشبه مجالك.')}</span></h1><p>{t('Video ads, AI content and motion graphics.','إعلانات فيديو ومحتوى AI وموشن جرافيك.')}<br/>{t('Choose your industry. Find relevant work.','اختار مجال نشاطك، وبعدها طريقة التنفيذ.')}</p><div className="intro-actions"><a className="btn primary" href="#existing">{t('Explore work ↓','استكشف الأعمال ↓')}</a><a className="btn" href="/mohamed_kbany.pdf" onClick={downloadCv}>{t('Download CV','تحميل CV')}</a></div></div>
+        <div className="industry-panel"><small>{t('BROWSE BY INDUSTRY','تصفح حسب مجال نشاطك')}</small><h2>{t('What do you sell?','عميلك بيبيع إيه؟')}</h2><div className="industry-grid">{selectors.map(([key,en,arabic])=><button key={key} onClick={()=>{setSector(key);setSectorVideo(null);setDraftOrder(null);setOrderMsg('');}}>{ar?arabic:en}</button>)}</div></div>
+      </section><div className="home-divider" id="existing">{t('Explore my work','استكشف أعمالي')}</div>
       <section className="brands">
-        <p className="hint">Explore projects and creative work for each brand.</p>
+        <p className="hint">{t("Explore projects and creative work for each brand.","استكشف الأعمال حسب العلامة التجارية")}</p>
         <div className="logo-row">
           {logos.concat(logos).map((l, i) => (
             <button key={l.id + "-" + i} className="brand-card" aria-hidden={i >= logos.length} tabIndex={i >= logos.length ? -1 : 0} onClick={() => {setBrand(l); setPlaying(null); trackLogoOpen(l);}}><img src={l.logo} alt={l.name || "brand"} loading="lazy" /><span>▶</span></button>
@@ -68,23 +86,23 @@ export default function Home() {
         </div>
       </section>
         <div className="stats">
-          <div><strong>5+</strong><span>Years of experience</span></div>
-          <div><strong>550+</strong><span>Projects completed</span></div>
-          <div><strong>95%</strong><span>Performance Rate</span></div>
-          <div><strong>250+</strong><span>Happy Clients</span></div>
+          <div><strong>5+</strong><span>{t('Years of experience','سنوات خبرة')}</span></div>
+          <div><strong>550+</strong><span>{t('Projects completed','مشروع مكتمل')}</span></div>
+          <div><strong>95%</strong><span>{t('Performance Rate','معدل الأداء')}</span></div>
+          <div><strong>250+</strong><span>{t('Happy Clients','عميل سعيد')}</span></div>
         </div>
       <section className="services">
-        <p className="kicker">WHAT I DO</p>
-        <h3>Services</h3>
-        <p className="hint">HOVER TO PREVIEW</p>
+        <p className="kicker">{t('WHAT I DO','خدماتي')}</p>
+        <h3>{t('Services','أقسام الأعمال')}</h3>
+        <p className="hint">{t('HOVER TO PREVIEW','اختار القسم')}</p>
         <div className="service-grid">
           {SERVICES.map((s) => (
             <Link key={s.cat} to={`/works/${s.cat}`} className="service-card">
               <img src={s.img} alt={s.title} loading="lazy" />
               <div className="service-body">
                 <span className="num">{s.n}</span>
-                <h4>{s.title}</h4>
-                <p>{s.desc}</p>
+                <h4>{ar?SERVICE_AR[s.cat][0]:s.title}</h4>
+                <p>{ar?SERVICE_AR[s.cat][1]:s.desc}</p>
                 <span className="arrow">→</span>
               </div>
             </Link>
@@ -93,8 +111,8 @@ export default function Home() {
       </section>
 
       <section className="selection">
-        <h3>A Selection of My Work</h3>
-        <p className="hint">A glimpse into my creative work. Explore the full portfolio for more projects and collaborations.</p>
+        <h3>{t('A Selection of My Work','مختارات من أعمالي')}</h3>
+        <p className="hint">{t('A glimpse into my creative work. Explore the full portfolio for more projects and collaborations.','لمحة من شغلي. استكشف البورتفوليو الكامل للمزيد من الأعمال.')}</p>
         <div className="vid-strip">
           {homeVids.map((v) => (
             <Link key={v.id} to={(() => { const target = library.find(x => x.category !== "home" && (x.url === v.url || (ytId(x.url) && ytId(x.url) === ytId(v.url)))); return target ? `/works/${target.category}?project=${encodeURIComponent(target.id)}` : "/works"; })()} className="vid-thumb">
@@ -102,10 +120,14 @@ export default function Home() {
             </Link>
           ))}
         </div>
-        <Link className="btn primary" to="/works">CLICK TO VIEW MY WORKS</Link>
+        <Link className="btn primary" to="/works">{t('CLICK TO VIEW MY WORKS','اضغط لمشاهدة الأعمال')}</Link>
       </section>
 
 
+      <footer className="home-footer"><div><h4>{t('Quick Links','روابط سريعة')}</h4><Link to="/">{t('Home','الرئيسية')}</Link><Link to="/works">{t('Works','الأعمال')}</Link>{SERVICES.map(s=><Link key={s.cat} to={'/works/'+s.cat}>{ar?SERVICE_AR[s.cat][0]:s.title}</Link>)}</div><div><h4>{t('Get in Touch','تواصل معي')}</h4><p>{t('Available for freelance & collaborations','متاح للعمل الحر والتعاون')}</p><a className="btn" href={WA} target="_blank" rel="noreferrer">{t('Contact Me','تواصل معي')}</a></div><p className="home-copy">{t('© 2026 Mohamed Kbany. All rights reserved.','© 2026 محمد قباني. جميع الحقوق محفوظة.')}</p></footer>
+      </div>
+      {sector && !sectorVideo && <div className="lightbox" onClick={()=>setSector(null)}><div className="lightbox-inner brand-dialog sector-dialog" dir={ar?'rtl':'ltr'} onClick={e=>e.stopPropagation()}><button className="close" aria-label={t('Close','إغلاق')} onClick={()=>setSector(null)}>✕</button><h3>{selectors.find(x=>x[0]===sector)?.[ar?2:1]}</h3><p className="hint">{t('Browse related work. Existing sections are unchanged.','أعمال مرتبطة بالمجال. الأقسام الأصلية زي ما هي.')}</p>{isOwner&&<div className="sector-owner"><p>{t('Owner only: use arrows to reorder this sector, then Save. Other sections keep their order.','لصاحب الموقع فقط: رتب بأسهم لفوق وتحت ثم احفظ. ترتيب الأقسام الأصلية لا يتغير.')}</p><button className="btn" disabled={savingOrder||!draftOrder} onClick={saveSectorOrder}>{savingOrder?t('Saving...','بيتحفظ...'):t('Save sector order','احفظ ترتيب المجال')}</button><p role="status">{orderMsg}</p></div>}<div className="brand-videos">{sectorItems.map((v,index)=><div key={v.id}><button onClick={()=>{setSectorVideo(v);trackVideoPlay(v);}}><img src={thumb(v.url)} onError={thumbFallback} alt={v.title}/><span>▶</span><p>{v.title}</p></button>{isOwner&&<div className="order-buttons"><span>{index+1}</span><button className="btn" disabled={index===0||savingOrder} onClick={()=>shiftSector(index,-1)} aria-label={t('Move up','حرك لفوق')}>↑</button><button className="btn" disabled={index===sectorItems.length-1||savingOrder} onClick={()=>shiftSector(index,1)} aria-label={t('Move down','حرك لتحت')}>↓</button></div>}</div>)}</div><Link className="btn" to="/works">{t('All works','كل الأعمال')}</Link></div></div>}
+      {sectorVideo && <PlayerOverlay video={sectorVideo} suggestions={[]} onClose={()=>setSectorVideo(null)} onPick={v=>{setSectorVideo(v);trackVideoPlay(v);}}/>}
       {brand && <div className="lightbox" onClick={()=>setBrand(null)}><div className="lightbox-inner brand-dialog" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setBrand(null)}>✕</button><h3>{brand.name}</h3>{playing ? <PlayerOverlay key={playing} video={{ url: playing, title: brand.name }} suggestions={(brand.videos || []).filter((u) => u !== playing).slice(0, 3).map((u) => ({ url: u, title: brand.name }))} onClose={() => setPlaying(null)} onPick={(v) => setPlaying(v.url)} /> : <div className="brand-videos">{(brand.videos || []).map((url,i)=><button key={i} onClick={()=>setPlaying(url)}><img src={thumb(url)} onError={thumbFallback} alt="Play project"/><span>▶</span></button>)}</div>}</div></div>}
     </>
   );
