@@ -31,7 +31,7 @@ export default function Works() {
   useEffect(() => {
     trackVisit();
     getDocs(collection(db, "videos")).then((s) => {
-      const all = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const all = s.docs.map((d) => ({ id: d.id, ...d.data() })).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
       setVideos(all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
     }).catch(() => {});
     setPlaying(null);
