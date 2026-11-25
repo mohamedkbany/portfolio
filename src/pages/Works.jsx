@@ -25,7 +25,7 @@ export default function Works() {
   const categoryVideos = videos.filter(v => v.category === cat);
   useEffect(() => {
     const selected = videos.find(v => v.id === search.get("project") && v.category === cat);
-    if (selected) { setKind(selected.type || "short"); setPlaying(selected); }
+    if (selected) { setKind(selected.type || "short"); setPlaying(selected); trackVideoPlay(selected); }
   }, [videos, cat, search]);
 
   useEffect(() => {
@@ -75,10 +75,11 @@ export default function Works() {
 
       {playing && (
         <PlayerOverlay
+          key={playing.id || playing.url}
           video={playing}
           suggestions={suggestionsFor(playing)}
           onClose={() => setPlaying(null)}
-          onPick={(v) => { setPlaying(v); trackVideoPlay(v); }}
+          onPick={(v) => setPlaying(v)}
         />
       )}
     </section>
