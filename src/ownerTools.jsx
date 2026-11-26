@@ -204,11 +204,11 @@ export function OwnerBar({ category, allVideos, onChanged, defaultType = "short"
   );
 }
 
-export function CardControls({ list, allVideos, index, onChanged, canMove = true }) {
+export function CardControls({ list, allVideos, index, onChanged, canMove = true, overlay = false }) {
   const v = list[index];
   const run = async (fn) => { try { await fn(); onChanged && onChanged(); } catch (e) { window.alert("Failed: " + (e.message || "could not save")); } };
   return (
-    <div style={{ display: "flex", gap: 4, justifyContent: "center", margin: "4px 0", flexWrap: "wrap" }} data-owner-controls>
+    <div style={overlay ? { position: "absolute", left: 0, right: 0, bottom: 2, zIndex: 3, display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" } : { display: "flex", gap: 4, justifyContent: "center", margin: "4px 0", flexWrap: "wrap" }} data-owner-controls>
       {canMove && <button style={btn} disabled={index === 0} onClick={() => run(() => moveVideo(list, allVideos, index, -1))} aria-label="Move up">↑</button>}
       {canMove && <button style={btn} disabled={index === list.length - 1} onClick={() => run(() => moveVideo(list, allVideos, index, 1))} aria-label="Move down">↓</button>}
       {canMove && <button style={btn} disabled={index === 0} onClick={() => run(() => moveToTop(list, allVideos, index))}>Top</button>}
