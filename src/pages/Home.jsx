@@ -127,7 +127,7 @@ export default function Home() {
           {(ownerMode ? homeBase : homeVids).map((v, vi, ownerList) => { const linkEl = (
             <Link key={v.id} to={(() => { const target = library.find(x => x.category !== "home" && (x.url === v.url || (ytId(x.url) && ytId(x.url) === ytId(v.url)))); return target ? `/works/${target.category}?project=${encodeURIComponent(target.id)}` : "/works"; })()} className="vid-thumb" style={ytId(v.url) === "po4fm-j5pt8" ? {gridColumn:"span 2",aspectRatio:"16/9",alignSelf:"center"} : undefined}>
               {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
-            </Link>); return ownerMode ? <div key={v.id} style={{ position: "relative" }}>{linkEl}{v.id === "home-ad23-selfhost" ? null : <CardControls list={ownerList.filter(x => x.id !== "home-ad23-selfhost")} allVideos={allRaw} index={ownerList.filter(x => x.id !== "home-ad23-selfhost").findIndex(x => x.id === v.id)} onChanged={loadHome} />}</div> : linkEl; })}
+            </Link>); return ownerMode ? <div key={v.id} style={{ position: "relative" }}>{linkEl}{v.id === "home-ad23-selfhost" ? null : <CardControls list={ownerList.filter(x => x.id !== "home-ad23-selfhost")} allVideos={allRaw} index={ownerList.filter(x => x.id !== "home-ad23-selfhost").findIndex(x => x.id === v.id)} onChanged={loadHome} overlay />}</div> : linkEl; })}
         </div>
         <Link className="btn primary" to="/works">{t('CLICK TO VIEW MY WORKS','اضغط لمشاهدة الأعمال')}</Link>
       </section>
