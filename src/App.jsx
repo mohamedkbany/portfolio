@@ -72,7 +72,7 @@ const isAdminHost = window.location.hostname === ADMIN_HOST;
 try {
   const q = new URLSearchParams(window.location.search);
   if (q.get("from") === "admin") {
-    sessionStorage.setItem("mk_from_admin", "1");
+    sessionStorage.setItem("mk_from_admin", "1"); localStorage.setItem("mk_optout", "1");
     q.delete("from");
     const clean = window.location.pathname + (q.toString() ? "?" + q.toString() : "") + window.location.hash;
     window.history.replaceState(null, "", clean);
