@@ -6,6 +6,7 @@ import { trackVisit, trackCvDownload, trackLogoOpen, trackVideoPlay } from "../a
 import { thumb, thumbFallback, ytId } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
+import { useOwner, OwnerBar, CardControls } from "../ownerTools";
 
 function downloadCv(e) {
   e.preventDefault();
@@ -52,19 +53,25 @@ export default function Home() {
   useEffect(()=>{document.documentElement.lang=lang;return()=>{document.documentElement.lang='en';};},[lang]);
   const selectors=[['perfume','Perfume','العطور'],['pharmacy','Pharmacy','الصيدليات'],['beauty','Beauty','التجميل'],['sports','Sports','الرياضة'],['electronics','Electronics','الإلكترونيات'],['food','Food & drinks','الأكل والمشروبات'],['ugc','UGC','UGC']];
   const [homeVids, setHomeVids] = useState([]);
+  const [homeBase, setHomeBase] = useState([]);
+  const [allRaw, setAllRaw] = useState([]);
+  const ownerMode = useOwner();
   const [library, setLibrary] = useState([]);
   const sectorItems=draftOrder||filterSector(library,sector);
   const [logos, setLogos] = useState([]);
   const [brand, setBrand] = useState(null);
   const [playing, setPlaying] = useState(null);
 
+  function loadHome() {
+    return getDocs(collection(db, "videos")).then((s) => {
+      const raw = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter(v => !v.id.startsWith("_")); setAllRaw(raw); const all = raw.filter(v => !v.deleted).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
+      setLibrary(all);
+      const home = all.filter(v => v.category === "home").sort((a,b)=>(a.order??0)-(b.order??0)); const ad23=all.find(v=>v.id==="OHkdV3yEbsNBHUsfCDXW"); if(ad23) home.splice(4,0,{...ad23,id:"home-ad23-selfhost",category:"home"}); const pinned=home.filter(v=>ytId(v.url)==="po4fm-j5pt8").slice(0,1); const rest=home.filter(v=>!pinned.includes(v)); for(let i=rest.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];} setHomeBase(home); setHomeVids([...pinned,...rest]);
+    }).catch(() => {});
+  }
   useEffect(() => {
     trackVisit();
-    getDocs(collection(db, "videos")).then((s) => {
-      const all = s.docs.map((d) => ({ id: d.id, ...d.data() })).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
-      setLibrary(all);
-      const home = all.filter(v => v.category === "home").sort((a,b)=>(a.order??0)-(b.order??0)); const ad23=all.find(v=>v.id==="OHkdV3yEbsNBHUsfCDXW"); if(ad23) home.splice(4,0,{...ad23,id:"home-ad23-selfhost",category:"home"}); const pinned=home.filter(v=>ytId(v.url)==="po4fm-j5pt8").slice(0,1); const rest=home.filter(v=>!pinned.includes(v)); for(let i=rest.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];} setHomeVids([...pinned,...rest]);
-    }).catch(() => {});
+    loadHome();
     getDocs(collection(db, "Logos")).then((s) => {
       setLogos(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
     }).catch(() => {});
@@ -115,12 +122,12 @@ export default function Home() {
       <section className="selection">
         <h3>{t('A Selection of My Work','مختارات من أعمالي')}</h3>
         <p className="hint">{t('A glimpse into my creative work. Explore the full portfolio for more projects and collaborations.','لمحة من شغلي. استكشف البورتفوليو الكامل للمزيد من الأعمال.')}</p>
+        {ownerMode && <OwnerBar category="home" allVideos={allRaw} onChanged={loadHome} defaultType="short" />}
         <div className="vid-strip">
-          {homeVids.map((v) => (
+          {(ownerMode ? homeBase : homeVids).map((v, vi, ownerList) => { const linkEl = (
             <Link key={v.id} to={(() => { const target = library.find(x => x.category !== "home" && (x.url === v.url || (ytId(x.url) && ytId(x.url) === ytId(v.url)))); return target ? `/works/${target.category}?project=${encodeURIComponent(target.id)}` : "/works"; })()} className="vid-thumb" style={ytId(v.url) === "po4fm-j5pt8" ? {gridColumn:"span 2",aspectRatio:"16/9",alignSelf:"center"} : undefined}>
               {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
-            </Link>
-          ))}
+            </Link>); return ownerMode ? <div key={v.id} style={{ position: "relative" }}>{linkEl}{v.id === "home-ad23-selfhost" ? null : <CardControls list={ownerList.filter(x => x.id !== "home-ad23-selfhost")} allVideos={allRaw} index={ownerList.filter(x => x.id !== "home-ad23-selfhost").findIndex(x => x.id === v.id)} onChanged={loadHome} overlay />}</div> : linkEl; })}
         </div>
         <Link className="btn primary" to="/works">{t('CLICK TO VIEW MY WORKS','اضغط لمشاهدة الأعمال')}</Link>
       </section>

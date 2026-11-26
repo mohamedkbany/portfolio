@@ -6,6 +6,7 @@ import { trackVisit, trackVideoPlay } from "../analytics";
 import { thumb, thumbFallback } from "../youtube";
 import PlayerOverlay from "../PlayerOverlay";
 import { WA } from "../App";
+import { useOwner, OwnerBar, CardControls } from "../ownerTools";
 
 const CATS = [
   { key: "ai", label: "AI Creative Solutions" },
@@ -19,6 +20,8 @@ export default function Works() {
   const [videos, setVideos] = useState([]);
   const [playing, setPlaying] = useState(null);
   const [kind, setKind] = useState("short");
+  const owner = useOwner();
+  const [allRaw, setAllRaw] = useState([]);
   const [search] = useSearchParams();
   const formats = ["short", "long"].filter(type => videos.some(v => v.category === cat && (v.type || "short") === type));
   const activeKind = formats.includes(kind) ? kind : formats[0];
@@ -28,12 +31,17 @@ export default function Works() {
     if (selected) { setKind(selected.type || "short"); setPlaying(selected); trackVideoPlay(selected); }
   }, [videos, cat, search]);
 
-  useEffect(() => {
-    trackVisit();
-    getDocs(collection(db, "videos")).then((s) => {
-      const all = s.docs.map((d) => ({ id: d.id, ...d.data() })).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
+  function loadVideos() {
+    return getDocs(collection(db, "videos")).then((s) => {
+      const raw = s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((v) => !v.id.startsWith("_")).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
+      setAllRaw(raw);
+      const all = raw.filter((v) => !v.deleted);
       setVideos(all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
     }).catch(() => {});
+  }
+  useEffect(() => {
+    trackVisit();
+    loadVideos();
     setPlaying(null);
   }, [cat]);
 
@@ -62,14 +70,14 @@ export default function Works() {
           <Link key={c.key} to={`/works/${c.key}`} className={c.key === cat ? "tab active" : "tab"}>{c.label}</Link>
         ))}
       </div>
+      {owner && <OwnerBar category={cat} allVideos={allRaw} onChanged={loadVideos} defaultType={activeKind || "short"} />}
       <div className={activeKind==="short"?"gallery shorts-gallery":"gallery"}>
-        {videos.filter(v=>v.category===cat && (v.type||"short")===activeKind).map((v) => (
+        {(() => { const shownList = videos.filter(v=>v.category===cat && (v.type||"short")===activeKind); return shownList.map((v, i) => { const cardEl = (
           <button key={v.id} className="card" onClick={() => open(v)}>
             {thumb(v.url) && <img src={thumb(v.url)} onError={thumbFallback} alt={v.title || "video"} loading="lazy" />}
             <span className="play">▶</span>
             {v.title && <span className="card-title">{v.title}</span>}
-          </button>
-        ))}
+          </button>); return owner ? <div key={v.id} style={{ position: "relative" }}>{cardEl}<CardControls list={shownList} allVideos={allRaw} index={i} onChanged={loadVideos} /></div> : cardEl; }); })()}
         {categoryVideos.length === 0 && <p className="hint">No videos in this category yet.</p>}
       </div>
 
