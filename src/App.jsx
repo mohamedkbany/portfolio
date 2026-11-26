@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import pageMetadata from "./page-metadata.json";
 import Works from "./pages/Works";
 import Admin from "./pages/Admin";
+import { consumeOwnerRedirect, startOwnerAutoSignIn } from "./ownerTools";
 import { trackCvDownload, startHeartbeat, startSessionClock, setTrackingOptOut } from "./analytics";
 
 const WA = "https://wa.me/201025510624?text=Hello!%20I'm%20interested%20in%20professional%20video%20editing%20services.";
@@ -79,6 +80,8 @@ try {
   }
 } catch (e) {}
 
+consumeOwnerRedirect();
+
 function fromAdmin() {
   try { return sessionStorage.getItem("mk_from_admin") === "1"; } catch (e) { return false; }
 }
@@ -116,6 +119,9 @@ export default function App() {
       if (!active) return;
       const u = auth.currentUser;
       if (u?.emailVerified && u.email?.toLowerCase() === ADMIN_EMAIL) setTrackingOptOut(true);
+      if (!isAdminHost && fromAdmin() && !(u?.emailVerified && u.email?.toLowerCase() === ADMIN_EMAIL) && !sessionStorage.getItem("mk_owner_tried")) {
+        sessionStorage.setItem("mk_owner_tried", "1"); startOwnerAutoSignIn(); return;
+      }
       setAuthReady(true);
     }).catch(() => { /* Fail closed: do not start tracking without restored auth. */ });
     return () => { active = false; };
