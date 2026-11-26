@@ -63,7 +63,7 @@ export default function Home() {
     getDocs(collection(db, "videos")).then((s) => {
       const all = s.docs.map((d) => ({ id: d.id, ...d.data() })).map(v => v.id === "OHkdV3yEbsNBHUsfCDXW" ? {...v,url:"https://res.cloudinary.com/m6ukdjvl/video/upload/v1795649072/1-virone-ad23.mp4"} : v);
       setLibrary(all);
-      const home = all.filter(v => v.category === "home").sort((a,b)=>(a.order??0)-(b.order??0)); const ad23=all.find(v=>v.id==="OHkdV3yEbsNBHUsfCDXW"); if(ad23) home.splice(4,0,{...ad23,id:"home-ad23-selfhost",category:"home"}); setHomeVids(home);
+      const home = all.filter(v => v.category === "home").sort((a,b)=>(a.order??0)-(b.order??0)); const ad23=all.find(v=>v.id==="OHkdV3yEbsNBHUsfCDXW"); if(ad23) home.splice(4,0,{...ad23,id:"home-ad23-selfhost",category:"home"}); const pinned=home.filter(v=>ytId(v.url)==="po4fm-j5pt8").slice(0,1); const rest=home.filter(v=>!pinned.includes(v)); for(let i=rest.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]];} setHomeVids([...pinned,...rest]);
     }).catch(() => {});
     getDocs(collection(db, "Logos")).then((s) => {
       setLogos(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
